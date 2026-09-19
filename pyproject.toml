@@ -8,6 +8,7 @@ dependencies = []
 
 [project.scripts]
 forgesoc = "forgesoc.main:main"
+forgesoc-generate = "forgesoc.simulation.main:main"
 
 [dependency-groups]
 dev = [
