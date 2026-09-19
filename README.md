@@ -20,9 +20,10 @@ when an observed limitation justifies them.
 | Windows/Linux authentication normalization | Implemented |
 | PostgreSQL persistence and migrations | Implemented |
 | Database-backed replay and detection | Implemented |
-| API and streaming | Planned |
+| Web console and versioned query API | Implemented |
+| Streaming | Planned |
 
-Current milestone: **Sprint 4 complete - PostgreSQL persistence**.
+Current milestone: **Sprint 5 complete - analyst web console and query API**.
 
 ## Implemented pipeline
 
@@ -172,6 +173,29 @@ uv run forgesoc-db stats
 Ingestion and alert writes are transactional and safe to repeat. The database
 keeps canonical events, alerts, and the ordered event evidence for each alert.
 
+## Launch the web console
+
+The web console replaces the normal demonstration workflow previously spread
+across several CLI commands. It provides dashboards, event search, alert
+investigation, ordered evidence, canonical or raw Windows/Linux JSONL import,
+scenario generation, detection execution, OpenAPI, and an embedded workshop
+architecture guide.
+
+```powershell
+docker compose up -d postgres
+$env:FORGESOC_DATABASE_URL = "postgresql+psycopg://forgesoc:forgesoc-local-only@localhost:5432/forgesoc_dev"
+uv run alembic upgrade head
+uv run forgesoc-web
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Alternatively, build and
+run both PostgreSQL and the web application with `docker compose up --build`.
+
+The API documentation is available at
+[http://127.0.0.1:8000/api/docs](http://127.0.0.1:8000/api/docs). The server
+binds to localhost by default and does not yet implement user authentication;
+do not expose it to an untrusted network.
+
 ## Repository layout
 
 ```text
@@ -184,6 +208,7 @@ src/forgesoc/output/   JSONL output adapter
 src/forgesoc/simulation/ Deterministic generator and scenario catalog
 src/forgesoc/normalization/ Source validation and normalization adapters
 src/forgesoc/persistence/ PostgreSQL mappings, repositories, and services
+src/forgesoc/api/       FastAPI, web console, and public response contracts
 src/forgesoc/main.py   Application composition and CLI
 migrations/            Versioned Alembic database migrations
 docker/                Local PostgreSQL initialization
@@ -198,9 +223,11 @@ tests/                 Unit and end-to-end pipeline tests
 - [Sprint 2](docs/sprints/sprint-02-telemetry-generator.md)
 - [Sprint 3](docs/sprints/sprint-03-normalization.md)
 - [Sprint 4](docs/sprints/sprint-04-postgresql.md)
+- [Sprint 5](docs/sprints/sprint-05-web-console.md)
 - [Scenario catalog](docs/scenarios.md)
 - [Normalization mappings](docs/normalization.md)
 - [Persistence architecture](docs/architecture/persistence.md)
+- [Web API architecture](docs/architecture/web-api.md)
 - [Development setup](docs/development/setup.md)
 - [Testing](docs/development/testing.md)
 - [Git and GitHub workflow](docs/development/git-workflow.md)

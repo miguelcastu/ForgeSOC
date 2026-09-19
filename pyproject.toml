@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.20.0",
+    "fastapi>=0.116",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
     "sqlalchemy>=2.0.54",
+    "uvicorn[standard]>=0.35",
 ]
 
 [project.scripts]
@@ -16,9 +18,11 @@ forgesoc = "forgesoc.main:main"
 forgesoc-generate = "forgesoc.simulation.main:main"
 forgesoc-normalize = "forgesoc.normalization.main:main"
 forgesoc-db = "forgesoc.persistence.main:main"
+forgesoc-web = "forgesoc.api.main:main"
 
 [dependency-groups]
 dev = [
+    "httpx2>=0.1",
     "mypy>=2.3.1",
     "pytest>=8.0",
     "ruff>=0.12",
@@ -28,6 +32,9 @@ dev = [
 testpaths = ["tests"]
 markers = [
     "postgres: requires a dedicated PostgreSQL test database",
+]
+filterwarnings = [
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning:starlette.testclient",
 ]
 
 [tool.ruff]

@@ -71,3 +71,16 @@ jobs:
           uv run forgesoc-db ingest data/normalized/ci.jsonl
           uv run forgesoc-db detect --start 2026-09-19T00:00:00Z --end 2026-09-20T00:00:00Z
           uv run forgesoc-db stats
+
+      - name: Smoke test web console
+        run: |
+          uv run forgesoc-web --host 127.0.0.1 --port 8000 &
+          API_PID=$!
+          trap 'kill $API_PID' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:8000/health/ready && break
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8000/ > /dev/null
+          curl --fail --silent http://127.0.0.1:8000/api/v1/stats > /dev/null
+          curl --fail --silent http://127.0.0.1:8000/api/openapi.json > /dev/null

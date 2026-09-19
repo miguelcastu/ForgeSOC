@@ -73,4 +73,7 @@ class DatabaseStatsService:
                 events=events.count(),
                 alerts=alerts.count(),
                 events_by_source=events.counts_by_source(),
+                events_by_type=events.counts_by_type(),
+                alerts_by_severity=alerts.counts_by_severity(),
+                alerts_by_rule=alerts.counts_by_rule(),
             )

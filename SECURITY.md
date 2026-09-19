@@ -23,3 +23,9 @@ variables or an ignored `.env` file. Do not commit PostgreSQL dumps or copied
 database volumes: even a development dump may contain telemetry or credentials.
 The Compose defaults are local development credentials and must not be reused
 in any shared or production environment.
+
+The Sprint 5 API has no authentication or authorization. Its direct launcher
+binds to `127.0.0.1` deliberately. Do not expose port 8000 to an untrusted
+network, and do not deploy the Compose configuration as a public service.
+Imported JSONL is limited and validated, but only synthetic telemetry belongs
+in this educational environment.

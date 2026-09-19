@@ -38,6 +38,24 @@ uv run alembic upgrade head
 uv run forgesoc-db health
 ```
 
+## Run the web console
+
+With PostgreSQL running and `FORGESOC_DATABASE_URL` configured:
+
+```powershell
+uv run forgesoc-web
+```
+
+Open `http://127.0.0.1:8000`. Add `--reload` while developing frontend or API
+code. The complete containerized stack is also available:
+
+```powershell
+docker compose up --build
+```
+
+The web application is intentionally bound to localhost when run directly.
+Authentication is not implemented yet, so it must not be exposed publicly.
+
 PowerShell does not automatically load `.env` into the current shell. Set the
 variable as shown above, or use your preferred environment loader. Never commit
 the resulting `.env` file.
