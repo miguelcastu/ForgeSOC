@@ -30,3 +30,11 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -v
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Smoke test command-line pipeline
+        run: |
+          uv run forgesoc-generate --scenario brute-force --output data/generated/ci.jsonl
+          uv run forgesoc data/generated/ci.jsonl data/alerts.jsonl
