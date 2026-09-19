@@ -33,10 +33,13 @@ def read_events(path: Path) -> Iterator[SecurityEvent]:
                         if data.get("outcome") is not None
                         else None
                     ),
+                    host=data.get("host"),
+                    attributes=data.get("attributes", {}),
                 )
 
             except (
                 KeyError,
+                TypeError,
                 ValueError,
                 json.JSONDecodeError,
             ) as exc:

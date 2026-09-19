@@ -14,6 +14,11 @@ from forgesoc.domain.models import (
 class BruteForceDetector:
     RULE_ID = "AUTH-BRUTEFORCE-001"
     RULE_TITLE = "Possible authentication brute force"
+    AUTHENTICATION_EVENT_TYPES = {
+        EventType.AUTHENTICATION,
+        EventType.AUTHENTICATION_SUCCESS,
+        EventType.AUTHENTICATION_FAILURE,
+    }
 
     def __init__(
         self,
@@ -28,7 +33,7 @@ class BruteForceDetector:
         self._alerted_keys: set[tuple[str, str]] = set()
 
     def process(self, event: SecurityEvent) -> list[Alert]:
-        if event.event_type != EventType.AUTHENTICATION:
+        if event.event_type not in self.AUTHENTICATION_EVENT_TYPES:
             return []
 
         if event.username is None or event.source_ip is None:

@@ -1,10 +1,27 @@
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+
+type JsonValue = (
+    str
+    | int
+    | float
+    | bool
+    | None
+    | list["JsonValue"]
+    | dict[str, "JsonValue"]
+)
 
 
 class EventType(StrEnum):
     AUTHENTICATION = "authentication"
+    AUTHENTICATION_SUCCESS = "authentication.success"
+    AUTHENTICATION_FAILURE = "authentication.failure"
+    PROCESS_START = "process.start"
+    NETWORK_CONNECTION = "network.connection"
+    DNS_QUERY = "dns.query"
+    HTTP_REQUEST = "http.request"
 
 
 class AuthenticationOutcome(StrEnum):
@@ -28,6 +45,8 @@ class SecurityEvent:
     username: str | None
     source_ip: str | None
     outcome: AuthenticationOutcome | None
+    host: str | None = None
+    attributes: Mapping[str, JsonValue] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
