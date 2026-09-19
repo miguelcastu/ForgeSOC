@@ -17,3 +17,9 @@ tokens, passwords, `.env` files, production logs, customer data, or personally
 identifiable information. Revoke and rotate any secret committed accidentally;
 deleting it from the latest commit is not sufficient because Git retains
 history.
+
+Database URLs contain credentials and must be supplied through environment
+variables or an ignored `.env` file. Do not commit PostgreSQL dumps or copied
+database volumes: even a development dump may contain telemetry or credentials.
+The Compose defaults are local development credentials and must not be reused
+in any shared or production environment.

@@ -132,3 +132,29 @@ Raw JSONL -> RawRecord -> NormalizationEngine -> source adapter
 Pydantic schemas exist only at untrusted external boundaries. The internal
 domain remains standard-library dataclasses. Detection therefore consumes one
 model regardless of the original provider.
+
+## Sprint 4 persistence
+
+```text
+normalized JSONL -> ingestion service -> event repository -> PostgreSQL
+                                                         |
+explicit UTC range -> detection service <- ordered events+
+                         |
+                         +-> DetectionEngine -> alert repository
+                                                |
+                                                +-> alert-event evidence
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `persistence/config.py` | Validates database configuration at the boundary. |
+| `persistence/database.py` | Creates the SQLAlchemy engine and session factory. |
+| `persistence/tables.py` | Defines PostgreSQL tables, constraints, and indexes. |
+| `persistence/mappers.py` | Converts between ORM rows and domain objects. |
+| `persistence/repositories.py` | Performs database reads and idempotent writes. |
+| `persistence/services.py` | Owns transaction boundaries and use-case orchestration. |
+| `persistence/main.py` | Exposes database operations without changing core CLIs. |
+
+The domain does not import SQLAlchemy. Repositories do not commit; application
+services own the transaction so an entire use case succeeds or rolls back as a
+unit. See [Persistence architecture](persistence.md) for the detailed model.

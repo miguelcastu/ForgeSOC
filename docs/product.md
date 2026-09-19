@@ -51,12 +51,22 @@ introduced.
 - Data-quality counts by source, event type, and error code.
 - A raw-to-normalized-to-alert command-line pipeline.
 
+## Implemented in Sprint 4
+
+- PostgreSQL storage for canonical events, alerts, and ordered alert evidence.
+- SQLAlchemy repositories separated from the domain and detection layers.
+- Alembic migrations with forward, reverse, and schema-drift checks in CI.
+- Idempotent event ingestion using event identity and source-record identity.
+- Transactional database-backed detection over explicit UTC time ranges.
+- A database CLI for health checks, ingestion, detection, and basic statistics.
+- Docker Compose development infrastructure and isolated PostgreSQL tests.
+
 ## Current non-goals
 
 - A complete SIEM replacement
 - Endpoint agent or packet capture
 - Production telemetry ingestion
-- Database, web API, or message broker
+- Web API or message broker
 - Machine-learning detection
 - Autonomous remediation
 - User interface

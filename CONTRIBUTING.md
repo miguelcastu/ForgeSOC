@@ -20,6 +20,10 @@ uv run mypy
 uv run pytest -v
 ```
 
+Persistence changes also require a reviewed Alembic migration and, with the
+test database configured, `uv run alembic check`. Never edit a migration that
+has already been shared; add a new revision instead.
+
 Do not include real security telemetry or secrets. New detections should have
 both positive and negative tests and explain their grouping key, threshold,
 time window, severity, and suppression behavior.
