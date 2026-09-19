@@ -1,6 +1,6 @@
 from collections import defaultdict, deque
 from datetime import timedelta
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
 from forgesoc.domain.models import (
     Alert,
@@ -81,15 +81,18 @@ class BruteForceDetector:
         triggering_event: SecurityEvent,
         failures: deque[SecurityEvent],
     ) -> Alert:
+        related_event_ids = tuple(event.event_id for event in failures)
+        alert_identity = "\0".join((self.RULE_ID, *related_event_ids))
+
         return Alert(
-            alert_id=str(uuid4()),
+            alert_id=str(uuid5(NAMESPACE_URL, alert_identity)),
             timestamp=triggering_event.timestamp,
             rule_id=self.RULE_ID,
             title=self.RULE_TITLE,
             severity=Severity.HIGH,
             username=triggering_event.username,
             source_ip=triggering_event.source_ip,
-            related_event_ids=tuple(event.event_id for event in failures),
+            related_event_ids=related_event_ids,
             reason=(
                 f"{len(failures)} failed authentications within "
                 f"{self.window.total_seconds():.0f} seconds"

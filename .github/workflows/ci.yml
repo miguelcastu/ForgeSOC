@@ -12,6 +12,23 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      FORGESOC_DATABASE_URL: postgresql+psycopg://forgesoc:forgesoc-ci@localhost:5432/forgesoc_test
+      FORGESOC_TEST_DATABASE_URL: postgresql+psycopg://forgesoc:forgesoc-ci@localhost:5432/forgesoc_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: forgesoc
+          POSTGRES_PASSWORD: forgesoc-ci
+          POSTGRES_DB: forgesoc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forgesoc -d forgesoc_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -24,6 +41,13 @@ jobs:
 
       - name: Synchronize locked environment
         run: uv sync --locked
+
+      - name: Validate database migrations
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
 
       - name: Run Ruff
         run: uv run ruff check .
@@ -43,3 +67,7 @@ jobs:
           uv run forgesoc data/generated/ci.jsonl data/alerts.jsonl
           uv run forgesoc-normalize data/raw/windows_brute_force.jsonl data/normalized/ci.jsonl
           uv run forgesoc data/normalized/ci.jsonl data/alerts.jsonl
+          uv run forgesoc-db health
+          uv run forgesoc-db ingest data/normalized/ci.jsonl
+          uv run forgesoc-db detect --start 2026-09-19T00:00:00Z --end 2026-09-20T00:00:00Z
+          uv run forgesoc-db stats

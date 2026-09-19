@@ -103,3 +103,18 @@ def test_detector_does_not_spam_duplicate_alerts() -> None:
         alerts.extend(detector.process(make_event(f"evt-{index}", index * 5)))
 
     assert len(alerts) == 1
+
+
+def test_same_evidence_generates_same_alert_id() -> None:
+    first_detector = BruteForceDetector()
+    second_detector = BruteForceDetector()
+    events = [make_event(f"evt-{index}", index * 5) for index in range(5)]
+
+    first_alerts = [
+        alert for event in events for alert in first_detector.process(event)
+    ]
+    second_alerts = [
+        alert for event in events for alert in second_detector.process(event)
+    ]
+
+    assert first_alerts[0].alert_id == second_alerts[0].alert_id

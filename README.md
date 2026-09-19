@@ -18,9 +18,11 @@ when an observed limitation justifies them.
 | JSONL alert output and CLI | Implemented |
 | Deterministic synthetic telemetry generator | Implemented |
 | Windows/Linux authentication normalization | Implemented |
-| Persistence, API, and streaming | Planned |
+| PostgreSQL persistence and migrations | Implemented |
+| Database-backed replay and detection | Implemented |
+| API and streaming | Planned |
 
-Current milestone: **Sprint 3 complete — authentication normalization**.
+Current milestone: **Sprint 4 complete - PostgreSQL persistence**.
 
 ## Implemented pipeline
 
@@ -60,6 +62,7 @@ The initial rule is `AUTH-BRUTEFORCE-001`:
 - [uv](https://docs.astral.sh/uv/)
 - Python 3.12, installed and managed through uv
 - Git
+- Docker Desktop (only for the PostgreSQL workflow)
 
 The project does not depend on a globally installed Python environment.
 
@@ -139,6 +142,36 @@ uv run forgesoc-normalize `
 The CLI reports totals by source, event type, and error code. Rejection records
 contain error context but intentionally omit the raw payload.
 
+## Persist and detect with PostgreSQL
+
+Copy the example configuration, start the local database, and apply migrations:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d postgres
+$env:FORGESOC_DATABASE_URL = "postgresql+psycopg://forgesoc:forgesoc-local-only@localhost:5432/forgesoc_dev"
+uv run alembic upgrade head
+uv run forgesoc-db health
+```
+
+Normalize raw telemetry, ingest it idempotently, and run detection over a UTC
+time range:
+
+```powershell
+uv run forgesoc-normalize `
+  data/raw/windows_brute_force.jsonl `
+  data/normalized/windows_brute_force.jsonl
+
+uv run forgesoc-db ingest data/normalized/windows_brute_force.jsonl
+uv run forgesoc-db detect `
+  --start 2025-01-01T00:00:00Z `
+  --end 2027-01-01T00:00:00Z
+uv run forgesoc-db stats
+```
+
+Ingestion and alert writes are transactional and safe to repeat. The database
+keeps canonical events, alerts, and the ordered event evidence for each alert.
+
 ## Repository layout
 
 ```text
@@ -150,7 +183,10 @@ src/forgesoc/detection Detection contract, engine, and rules
 src/forgesoc/output/   JSONL output adapter
 src/forgesoc/simulation/ Deterministic generator and scenario catalog
 src/forgesoc/normalization/ Source validation and normalization adapters
+src/forgesoc/persistence/ PostgreSQL mappings, repositories, and services
 src/forgesoc/main.py   Application composition and CLI
+migrations/            Versioned Alembic database migrations
+docker/                Local PostgreSQL initialization
 tests/                 Unit and end-to-end pipeline tests
 ```
 
@@ -161,8 +197,10 @@ tests/                 Unit and end-to-end pipeline tests
 - [Sprint 1](docs/sprints/sprint-01-core.md)
 - [Sprint 2](docs/sprints/sprint-02-telemetry-generator.md)
 - [Sprint 3](docs/sprints/sprint-03-normalization.md)
+- [Sprint 4](docs/sprints/sprint-04-postgresql.md)
 - [Scenario catalog](docs/scenarios.md)
 - [Normalization mappings](docs/normalization.md)
+- [Persistence architecture](docs/architecture/persistence.md)
 - [Development setup](docs/development/setup.md)
 - [Testing](docs/development/testing.md)
 - [Git and GitHub workflow](docs/development/git-workflow.md)

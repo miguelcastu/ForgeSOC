@@ -21,6 +21,11 @@ uv run forgesoc data/security_events.jsonl data/alerts.jsonl
 - `tests/test_normalization.py` verifies source mappings, validation failures,
   stable identity, UTC conversion, rejection policy, quality reports, and raw
   Windows/Linux telemetry replayed through detection.
+- `tests/test_persistence.py` verifies configuration, mappings, deterministic
+  alert identity, and table metadata without requiring a database.
+- `tests/test_persistence_postgres.py` verifies migrations, PostgreSQL types,
+  idempotency, ordering, transactions, evidence integrity, and a complete
+  normalized-event-to-persisted-alert workflow.
 
 Tests must be deterministic: fixed timestamps and synthetic identities make
 failures reproducible. A detection change should include positive and negative
@@ -45,3 +50,20 @@ uv run mypy
 ForgeSOC publishes the `py.typed` marker so its annotations are available when
 the installed package is checked. Mypy runs in strict mode over application
 code and is also required by CI.
+
+## PostgreSQL integration tests
+
+Integration tests skip unless an explicitly named test database is provided.
+The safety check requires `test` in the database name before it truncates data.
+
+```powershell
+docker compose up -d postgres
+$env:FORGESOC_DATABASE_URL = "postgresql+psycopg://forgesoc:forgesoc-local-only@localhost:5432/forgesoc_test"
+$env:FORGESOC_TEST_DATABASE_URL = $env:FORGESOC_DATABASE_URL
+uv run alembic upgrade head
+uv run pytest -m postgres -v
+uv run alembic check
+```
+
+Run `uv run pytest -m "not postgres" -v` for the service-independent subset.
+CI provisions PostgreSQL and executes both subsets together.

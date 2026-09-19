@@ -5,13 +5,17 @@ description = "Experimental Detection and Response Platform"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20.0",
+    "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.5",
+    "sqlalchemy>=2.0.54",
 ]
 
 [project.scripts]
 forgesoc = "forgesoc.main:main"
 forgesoc-generate = "forgesoc.simulation.main:main"
 forgesoc-normalize = "forgesoc.normalization.main:main"
+forgesoc-db = "forgesoc.persistence.main:main"
 
 [dependency-groups]
 dev = [
@@ -22,6 +26,9 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "postgres: requires a dedicated PostgreSQL test database",
+]
 
 [tool.ruff]
 line-length = 88
