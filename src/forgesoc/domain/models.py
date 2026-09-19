@@ -13,6 +13,8 @@ type JsonValue = (
     | dict[str, "JsonValue"]
 )
 
+CANONICAL_SCHEMA_VERSION = "1.0.0"
+
 
 class EventType(StrEnum):
     AUTHENTICATION = "authentication"
@@ -47,6 +49,8 @@ class SecurityEvent:
     outcome: AuthenticationOutcome | None
     host: str | None = None
     attributes: Mapping[str, JsonValue] = field(default_factory=dict)
+    source_record_id: str | None = None
+    schema_version: str = CANONICAL_SCHEMA_VERSION
 
 
 @dataclass(frozen=True, slots=True)
