@@ -28,6 +28,9 @@ jobs:
       - name: Run Ruff
         run: uv run ruff check .
 
+      - name: Run type checks
+        run: uv run mypy
+
       - name: Run tests
         run: uv run pytest -v
 
@@ -38,3 +41,5 @@ jobs:
         run: |
           uv run forgesoc-generate --scenario brute-force --output data/generated/ci.jsonl
           uv run forgesoc data/generated/ci.jsonl data/alerts.jsonl
+          uv run forgesoc-normalize data/raw/windows_brute_force.jsonl data/normalized/ci.jsonl
+          uv run forgesoc data/normalized/ci.jsonl data/alerts.jsonl
