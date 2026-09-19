@@ -16,6 +16,8 @@ wheels/
 # Generated project output
 data/alerts.jsonl
 data/generated/
+data/normalized/
+data/rejected/
 
 # Local configuration and secrets
 .env

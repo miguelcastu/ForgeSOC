@@ -35,6 +35,8 @@ def read_events(path: Path) -> Iterator[SecurityEvent]:
                     ),
                     host=data.get("host"),
                     attributes=data.get("attributes", {}),
+                    source_record_id=data.get("source_record_id"),
+                    schema_version=data.get("schema_version", "1.0.0"),
                 )
 
             except (
