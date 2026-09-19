@@ -31,6 +31,15 @@ introduced.
 - JSONL alert output and a command-line interface.
 - Unit and end-to-end tests.
 
+## Implemented in Sprint 2
+
+- Deterministic synthetic telemetry controlled by a seed and start time.
+- Authentication, process, network, DNS, and HTTP event generation.
+- Normal, brute-force, post-compromise, suspicious PowerShell, malicious-domain,
+  and credential-spraying scenarios.
+- A protected JSONL writer and dedicated generator CLI.
+- Replay of generated authentication scenarios through the detection engine.
+
 ## Current non-goals
 
 - A complete SIEM replacement

@@ -78,3 +78,26 @@ expire and the count drops below the threshold, a future burst may alert again.
 
 These are explicit Sprint 1 tradeoffs, not hidden production claims. Later
 sprints should change them only when a demonstrated requirement justifies it.
+
+## Sprint 2 telemetry simulation
+
+```text
+Scenario -> TelemetryGenerator -> SecurityEvent stream -> JSONL dataset
+                                      |
+                                      v
+                               Detection pipeline
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `simulation/base.py` | Defines the structural `Scenario` contract. |
+| `simulation/entities.py` | Contains fictional users, hosts, reserved IPs, and safe domains. |
+| `simulation/generator.py` | Owns seeded randomness, simulated time, and deterministic IDs. |
+| `simulation/scenarios.py` | Describes the event sequence and meaning of each scenario. |
+| `simulation/jsonl.py` | Serializes events deterministically and protects existing files. |
+| `simulation/main.py` | Exposes scenario discovery and generation through a CLI. |
+
+`SecurityEvent` keeps common detection fields explicit and stores event-specific
+data in `attributes`. This is a deliberate temporary canonical model, not a
+claim that all telemetry sources naturally share one schema. Source-specific
+formats and normalization remain future work.

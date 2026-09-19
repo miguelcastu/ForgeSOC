@@ -16,10 +16,10 @@ when an observed limitation justifies them.
 | Typed event and alert domain models | Implemented |
 | Stateful brute-force detection | Implemented |
 | JSONL alert output and CLI | Implemented |
-| Synthetic telemetry generator | Planned |
+| Deterministic synthetic telemetry generator | Implemented |
 | Normalization, persistence, API, and streaming | Planned |
 
-Current milestone: **Sprint 1 complete — core detection pipeline**.
+Current milestone: **Sprint 2 complete — deterministic telemetry simulation**.
 
 ## Implemented pipeline
 
@@ -80,6 +80,31 @@ Expected application output:
 ForgeSOC generated 1 alert(s).
 ```
 
+## Generate synthetic telemetry
+
+List the available scenarios:
+
+```powershell
+uv run forgesoc-generate --list-scenarios
+```
+
+Generate and replay a deterministic brute-force scenario:
+
+```powershell
+uv run forgesoc-generate `
+  --scenario brute-force `
+  --seed 42 `
+  --output data/generated/brute-force.jsonl
+
+uv run forgesoc `
+  data/generated/brute-force.jsonl `
+  data/alerts.jsonl
+```
+
+Generation refuses to replace an existing dataset. Pass `--force` only when
+replacement is intentional. The same scenario, seed, and start time produce the
+same telemetry.
+
 The included events and identifiers are entirely synthetic.
 
 ## Repository layout
@@ -91,6 +116,7 @@ src/forgesoc/domain/   Domain models and controlled vocabularies
 src/forgesoc/ingestion JSONL input adapter
 src/forgesoc/detection Detection contract, engine, and rules
 src/forgesoc/output/   JSONL output adapter
+src/forgesoc/simulation/ Deterministic generator and scenario catalog
 src/forgesoc/main.py   Application composition and CLI
 tests/                 Unit and end-to-end pipeline tests
 ```
@@ -100,6 +126,8 @@ tests/                 Unit and end-to-end pipeline tests
 - [Product scope](docs/product.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Sprint 1](docs/sprints/sprint-01-core.md)
+- [Sprint 2](docs/sprints/sprint-02-telemetry-generator.md)
+- [Scenario catalog](docs/scenarios.md)
 - [Development setup](docs/development/setup.md)
 - [Testing](docs/development/testing.md)
 - [Git and GitHub workflow](docs/development/git-workflow.md)
