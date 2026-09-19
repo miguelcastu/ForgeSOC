@@ -40,6 +40,17 @@ introduced.
 - A protected JSONL writer and dedicated generator CLI.
 - Replay of generated authentication scenarios through the detection engine.
 
+## Implemented in Sprint 3
+
+- A versioned canonical event schema inspired by OCSF concepts.
+- Raw JSONL envelopes with source provenance and source record identity.
+- Pydantic validation at external boundaries.
+- Windows Security and Linux SSH authentication adapters.
+- Deterministic normalized event IDs.
+- Strict and continue-on-error policies with explicit rejection output.
+- Data-quality counts by source, event type, and error code.
+- A raw-to-normalized-to-alert command-line pipeline.
+
 ## Current non-goals
 
 - A complete SIEM replacement

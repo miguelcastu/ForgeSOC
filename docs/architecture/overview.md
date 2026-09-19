@@ -101,3 +101,34 @@ Scenario -> TelemetryGenerator -> SecurityEvent stream -> JSONL dataset
 data in `attributes`. This is a deliberate temporary canonical model, not a
 claim that all telemetry sources naturally share one schema. Source-specific
 formats and normalization remain future work.
+
+## Sprint 3 normalization
+
+```text
+Raw JSONL -> RawRecord -> NormalizationEngine -> source adapter
+                                                 |
+                      +--------------------------+
+                      v
+                SecurityEvent v1
+                      |
+              +-------+--------+
+              v                v
+      normalized JSONL   DetectionEngine
+```
+
+| Module | Responsibility |
+| --- | --- |
+| `ingestion/raw_jsonl.py` | Preserves raw lines and their file/line provenance. |
+| `normalization/schemas.py` | Validates the common raw envelope. |
+| `normalization/base.py` | Defines the adapter contract and stable event identity. |
+| `normalization/windows_parser.py` | Maps Windows Security authentication records. |
+| `normalization/linux_parser.py` | Maps structured Linux SSH records. |
+| `normalization/engine.py` | Parses envelopes, selects adapters, and classifies failures. |
+| `normalization/models.py` | Represents successes, failures, error codes, and quality reports. |
+| `normalization/main.py` | Composes the normalizers and exposes the CLI. |
+| `output/events_jsonl.py` | Owns shared canonical-event serialization. |
+| `output/rejections_jsonl.py` | Writes safe rejection metadata without raw payloads. |
+
+Pydantic schemas exist only at untrusted external boundaries. The internal
+domain remains standard-library dataclasses. Detection therefore consumes one
+model regardless of the original provider.

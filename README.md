@@ -17,9 +17,10 @@ when an observed limitation justifies them.
 | Stateful brute-force detection | Implemented |
 | JSONL alert output and CLI | Implemented |
 | Deterministic synthetic telemetry generator | Implemented |
-| Normalization, persistence, API, and streaming | Planned |
+| Windows/Linux authentication normalization | Implemented |
+| Persistence, API, and streaming | Planned |
 
-Current milestone: **Sprint 2 complete — deterministic telemetry simulation**.
+Current milestone: **Sprint 3 complete — authentication normalization**.
 
 ## Implemented pipeline
 
@@ -107,6 +108,37 @@ same telemetry.
 
 The included events and identifiers are entirely synthetic.
 
+## Normalize source telemetry
+
+ForgeSOC currently normalizes Windows Security `4624`/`4625` records and
+structured Linux SSH authentication records into the same canonical schema.
+
+```powershell
+uv run forgesoc-normalize --list-sources
+
+uv run forgesoc-normalize `
+  data/raw/windows_brute_force.jsonl `
+  data/normalized/windows_brute_force.jsonl
+
+uv run forgesoc `
+  data/normalized/windows_brute_force.jsonl `
+  data/alerts.jsonl
+```
+
+Normalization is strict by default. To continue after invalid records, provide
+an explicit rejection file:
+
+```powershell
+uv run forgesoc-normalize `
+  data/raw/mixed.jsonl `
+  data/normalized/mixed.jsonl `
+  --continue-on-error `
+  --rejected-output data/rejected/mixed.jsonl
+```
+
+The CLI reports totals by source, event type, and error code. Rejection records
+contain error context but intentionally omit the raw payload.
+
 ## Repository layout
 
 ```text
@@ -117,6 +149,7 @@ src/forgesoc/ingestion JSONL input adapter
 src/forgesoc/detection Detection contract, engine, and rules
 src/forgesoc/output/   JSONL output adapter
 src/forgesoc/simulation/ Deterministic generator and scenario catalog
+src/forgesoc/normalization/ Source validation and normalization adapters
 src/forgesoc/main.py   Application composition and CLI
 tests/                 Unit and end-to-end pipeline tests
 ```
@@ -127,7 +160,9 @@ tests/                 Unit and end-to-end pipeline tests
 - [Architecture overview](docs/architecture/overview.md)
 - [Sprint 1](docs/sprints/sprint-01-core.md)
 - [Sprint 2](docs/sprints/sprint-02-telemetry-generator.md)
+- [Sprint 3](docs/sprints/sprint-03-normalization.md)
 - [Scenario catalog](docs/scenarios.md)
+- [Normalization mappings](docs/normalization.md)
 - [Development setup](docs/development/setup.md)
 - [Testing](docs/development/testing.md)
 - [Git and GitHub workflow](docs/development/git-workflow.md)

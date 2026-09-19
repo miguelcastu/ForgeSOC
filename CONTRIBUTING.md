@@ -16,6 +16,7 @@ ForgeSOC currently uses a lightweight workflow suitable for a personal project.
 ```powershell
 uv sync
 uv run ruff check .
+uv run mypy
 uv run pytest -v
 ```
 
