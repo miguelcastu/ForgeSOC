@@ -26,6 +26,10 @@ uv run forgesoc data/security_events.jsonl data/alerts.jsonl
 - `tests/test_persistence_postgres.py` verifies migrations, PostgreSQL types,
   idempotency, ordering, transactions, evidence integrity, and a complete
   normalized-event-to-persisted-alert workflow.
+- `tests/test_api.py` verifies static assets, OpenAPI, liveness, request IDs,
+  and stable error responses without a database.
+- `tests/test_api_postgres.py` verifies web operations, filters, cursor
+  pagination, import, detection, idempotency, and ordered evidence.
 
 Tests must be deterministic: fixed timestamps and synthetic identities make
 failures reproducible. A detection change should include positive and negative

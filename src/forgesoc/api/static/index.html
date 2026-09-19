@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ForgeSOC detection and response console">
+  <title>ForgeSOC · Detection Console</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" aria-label="ForgeSOC home">
+        <span class="brand-mark"><span></span></span>
+        <span><strong>Forge</strong>SOC<small>Detection platform</small></span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navegación principal">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="nav-icon">⌁</span><span>Overview</span>
+        </button>
+        <button class="nav-item" data-view="events">
+          <span class="nav-icon">≋</span><span>Events</span><b id="nav-events">0</b>
+        </button>
+        <button class="nav-item" data-view="alerts">
+          <span class="nav-icon">△</span><span>Alerts</span><b id="nav-alerts">0</b>
+        </button>
+        <button class="nav-item" data-view="workshop">
+          <span class="nav-icon">◇</span><span>Workshop</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="system-state">
+          <span class="pulse"></span>
+          <div><strong id="system-label">Connecting</strong><small>PostgreSQL + API</small></div>
+        </div>
+        <a class="api-link" href="/api/docs" target="_blank" rel="noreferrer">OpenAPI ↗</a>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">OPEN DETECTION &amp; RESPONSE</p>
+          <h1 id="page-title">Security overview</h1>
+        </div>
+        <div class="top-actions">
+          <span class="last-update" id="last-update">Not synchronized</span>
+          <button class="button ghost" id="refresh-button">↻ Refresh</button>
+          <button class="button primary" data-open-demo>+ Generate telemetry</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-dashboard">
+        <div class="hero-grid">
+          <article class="hero-card">
+            <div class="hero-copy">
+              <span class="status-pill"><i></i> PLATFORM ONLINE</span>
+              <h2>Signals into<br><em>decisions.</em></h2>
+              <p>Canonical telemetry, explainable detections and durable evidence in one focused console.</p>
+              <div class="hero-actions">
+                <button class="button primary" data-open-demo>Launch demo scenario</button>
+                <button class="text-button" data-view-target="workshop">5-minute workshop guide →</button>
+              </div>
+            </div>
+            <div class="signal-orbit" aria-hidden="true">
+              <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+              <div class="signal-core"><span>FS</span><small>ENGINE</small></div>
+              <i class="node n1"></i><i class="node n2"></i><i class="node n3"></i>
+            </div>
+          </article>
+
+          <article class="threat-card">
+            <div class="card-heading"><span>Detection posture</span><small>LIVE</small></div>
+            <div class="threat-score"><strong id="posture-score">100</strong><span>/100</span></div>
+            <p id="posture-copy">No critical findings in the current dataset.</p>
+            <div class="meter"><span id="posture-meter"></span></div>
+            <div class="mini-stats"><span><b id="high-count">0</b> high</span><span><b id="critical-count">0</b> critical</span></div>
+          </article>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card cyan"><span>Total events</span><strong id="metric-events">—</strong><small>Canonical records</small></article>
+          <article class="metric-card coral"><span>Active alerts</span><strong id="metric-alerts">—</strong><small>Explainable findings</small></article>
+          <article class="metric-card violet"><span>Data sources</span><strong id="metric-sources">—</strong><small>Normalized providers</small></article>
+          <article class="metric-card lime"><span>Detection rules</span><strong id="metric-rules">—</strong><small>Producing findings</small></article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel span-two">
+            <div class="panel-title"><div><span class="eyebrow">TELEMETRY MIX</span><h3>Events by type</h3></div><button class="text-button" data-view-target="events">Explore events →</button></div>
+            <div class="bar-chart" id="event-chart"><div class="empty-state">Waiting for telemetry</div></div>
+          </article>
+          <article class="panel">
+            <div class="panel-title"><div><span class="eyebrow">SEVERITY</span><h3>Alert distribution</h3></div></div>
+            <div class="donut-wrap"><div class="donut" id="severity-donut"><span id="donut-total">0<small>alerts</small></span></div><div class="legend" id="severity-legend"></div></div>
+          </article>
+          <article class="panel span-three">
+            <div class="panel-title"><div><span class="eyebrow">LATEST FINDINGS</span><h3>Detection queue</h3></div><button class="text-button" data-view-target="alerts">View all alerts →</button></div>
+            <div class="compact-alerts" id="latest-alerts"><div class="empty-state">No alerts detected</div></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-events">
+        <div class="section-intro"><div><span class="eyebrow">CANONICAL TELEMETRY</span><h2>Event explorer</h2><p>Search every normalized signal stored in PostgreSQL.</p></div><label class="button ghost file-button">↑ Import JSONL<input id="jsonl-input" type="file" accept=".jsonl,.json"></label></div>
+        <form class="filter-bar" id="event-filters">
+          <label>Type<select name="event_type"><option value="">All types</option></select></label>
+          <label>Source<select name="source"><option value="">All sources</option></select></label>
+          <label>User<input name="username" placeholder="marta.soler"></label>
+          <label>Source IP<input name="source_ip" placeholder="198.51.100.73"></label>
+          <label>Outcome<select name="outcome"><option value="">Any</option><option>success</option><option>failure</option></select></label>
+          <button class="button primary" type="submit">Apply filters</button>
+          <button class="button ghost" type="reset">Clear</button>
+        </form>
+        <article class="table-panel">
+          <div class="table-meta"><span id="event-result-label">Latest events</span><span>Newest first</span></div>
+          <div class="table-scroll"><table><thead><tr><th>Timestamp</th><th>Event type</th><th>Identity</th><th>Source IP</th><th>Source</th><th>Outcome</th><th></th></tr></thead><tbody id="events-body"></tbody></table></div>
+          <div class="pagination"><button class="button ghost" id="events-back">← Previous</button><span id="events-page">Page 1</span><button class="button ghost" id="events-next">Next →</button></div>
+        </article>
+      </section>
+
+      <section class="view" id="view-alerts">
+        <div class="section-intro"><div><span class="eyebrow">EXPLAINABLE DETECTIONS</span><h2>Alert investigation</h2><p>Every finding keeps the ordered evidence that produced it.</p></div><button class="button primary" id="run-detection">▶ Run detection</button></div>
+        <form class="filter-bar" id="alert-filters">
+          <label>Severity<select name="severity"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select></label>
+          <label>Rule<select name="rule_id"><option value="">All rules</option></select></label>
+          <label>User<input name="username" placeholder="marta.soler"></label>
+          <label>Source IP<input name="source_ip" placeholder="198.51.100.73"></label>
+          <button class="button primary" type="submit">Apply filters</button>
+          <button class="button ghost" type="reset">Clear</button>
+        </form>
+        <div class="alert-grid" id="alerts-grid"></div>
+        <div class="pagination"><button class="button ghost" id="alerts-back">← Previous</button><span id="alerts-page">Page 1</span><button class="button ghost" id="alerts-next">Next →</button></div>
+      </section>
+
+      <section class="view" id="view-workshop">
+        <div class="workshop-hero">
+          <span class="status-pill"><i></i> WORKSHOP MODE</span>
+          <h2>From raw signal to<br><em>explainable alert.</em></h2>
+          <p>A five-minute guided tour through ForgeSOC's architecture and detection lifecycle.</p>
+          <div class="hero-actions"><button class="button primary" data-open-demo>Start live demo</button><a class="button ghost" href="/api/docs" target="_blank">Explore API</a></div>
+        </div>
+
+        <article class="architecture panel">
+          <div class="panel-title"><div><span class="eyebrow">SYSTEM ARCHITECTURE</span><h3>One signal, explicit boundaries</h3></div><span class="architecture-note">Synchronous · typed · testable</span></div>
+          <div class="architecture-flow">
+            <div class="arch-node raw"><span>01</span><b>Source telemetry</b><small>Windows 4624/4625<br>Linux SSH</small></div>
+            <div class="flow-arrow"><i></i><small>validate</small></div>
+            <div class="arch-node canonical"><span>02</span><b>Normalization</b><small>Pydantic adapters<br>Canonical event v1</small></div>
+            <div class="flow-arrow"><i></i><small>persist</small></div>
+            <div class="arch-node storage"><span>03</span><b>PostgreSQL</b><small>JSONB + INET<br>Idempotent writes</small></div>
+            <div class="flow-arrow"><i></i><small>replay</small></div>
+            <div class="arch-node detect"><span>04</span><b>Detection</b><small>Sliding windows<br>Deterministic alerts</small></div>
+            <div class="flow-arrow"><i></i><small>investigate</small></div>
+            <div class="arch-node console"><span>05</span><b>Web console</b><small>API + evidence<br>Analyst workflow</small></div>
+          </div>
+        </article>
+
+        <div class="workshop-grid">
+          <article class="panel demo-script"><span class="eyebrow">5-MINUTE SCRIPT</span><h3>Your workshop flow</h3><ol><li><b>00:00 · Problem</b><span>Different telemetry formats make detections fragile.</span></li><li><b>00:45 · Normalize</b><span>Windows and Linux become the same canonical event.</span></li><li><b>01:30 · Persist</b><span>PostgreSQL deduplicates signals and preserves time.</span></li><li><b>02:15 · Detect</b><span>Five failures in 60 seconds create one stable alert.</span></li><li><b>03:15 · Investigate</b><span>Open the alert and walk through ordered evidence.</span></li><li><b>04:15 · Engineering</b><span>Show tests, OpenAPI, migrations and ADR decisions.</span></li></ol></article>
+          <article class="panel principles"><span class="eyebrow">DESIGN PRINCIPLES</span><h3>Why it stays understandable</h3><div class="principle"><b>Explicit boundaries</b><p>Raw schemas, domain models and database rows have separate responsibilities.</p></div><div class="principle"><b>Replay-safe</b><p>Stable identities make ingestion and detection idempotent.</p></div><div class="principle"><b>Explainable by default</b><p>Alerts retain every event used as evidence, in order.</p></div><div class="principle"><b>Measured evolution</b><p>Each sprint adds infrastructure only when a limitation justifies it.</p></div></article>
+        </div>
+
+        <article class="panel glossary"><div class="panel-title"><div><span class="eyebrow">QUICK REFERENCE</span><h3>Concepts worth explaining</h3></div></div><div class="glossary-grid"><div><b>Canonical event</b><p>A provider-neutral security fact consumed by every detector.</p></div><div><b>Adapter</b><p>A source-specific translator behind one normalization contract.</p></div><div><b>Sliding window</b><p>Only failures inside the active 60-second interval are counted.</p></div><div><b>Idempotency</b><p>Replaying the same input changes no stored result.</p></div><div><b>Evidence link</b><p>An ordered relationship from an alert to the events that justify it.</p></div><div><b>ADR</b><p>A short record explaining why an architectural decision was taken.</p></div></div></article>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="demo-modal" aria-hidden="true">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="demo-title">
+      <button class="close-button" data-close-modal aria-label="Close">×</button>
+      <span class="eyebrow">DEMO CONTROL</span><h2 id="demo-title">Generate safe telemetry</h2><p>Choose a deterministic scenario. Running it twice demonstrates deduplication.</p>
+      <label>Scenario<select id="scenario-select"></select></label>
+      <div class="scenario-description" id="scenario-description"></div>
+      <div class="modal-fields"><label>Seed<input id="scenario-seed" type="number" value="42"></label><label>Start time<input id="scenario-start" type="datetime-local" value="2026-09-20T10:00"></label></div>
+      <div class="modal-actions"><button class="button ghost" data-close-modal>Cancel</button><button class="button primary" id="seed-button">Generate &amp; ingest</button></div>
+    </section>
+  </div>
+
+  <aside class="drawer" id="detail-drawer" aria-hidden="true"><button class="close-button" id="drawer-close" aria-label="Close">×</button><div id="drawer-content"></div></aside>
+  <div class="toast-stack" id="toasts" aria-live="polite"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

@@ -2,12 +2,13 @@ from collections.abc import Iterable
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from forgesoc.domain.models import Alert, SecurityEvent
 from forgesoc.persistence.mappers import alert_from_row, event_from_row
+from forgesoc.persistence.models import AlertPage, AlertQuery, EventPage, EventQuery
 from forgesoc.persistence.tables import AlertEventRow, AlertRow, EventRow
 
 
@@ -65,6 +66,57 @@ class EventRepository:
             .order_by(EventRow.source)
         )
         return {source: count for source, count in self._session.execute(statement)}
+
+    def counts_by_type(self) -> dict[str, int]:
+        statement = (
+            select(EventRow.event_type, func.count())
+            .group_by(EventRow.event_type)
+            .order_by(EventRow.event_type)
+        )
+        return {
+            event_type: count
+            for event_type, count in self._session.execute(statement)
+        }
+
+    def search(self, query: EventQuery) -> EventPage:
+        statement = select(EventRow)
+        if query.start is not None:
+            statement = statement.where(EventRow.timestamp >= query.start)
+        if query.end is not None:
+            statement = statement.where(EventRow.timestamp < query.end)
+        if query.event_type is not None:
+            statement = statement.where(EventRow.event_type == query.event_type)
+        if query.source is not None:
+            statement = statement.where(EventRow.source == query.source)
+        if query.username is not None:
+            statement = statement.where(EventRow.username.ilike(f"%{query.username}%"))
+        if query.source_ip is not None:
+            statement = statement.where(EventRow.source_ip == query.source_ip)
+        if query.outcome is not None:
+            statement = statement.where(EventRow.outcome == query.outcome)
+        if query.cursor_timestamp is not None and query.cursor_id is not None:
+            statement = statement.where(
+                or_(
+                    EventRow.timestamp < query.cursor_timestamp,
+                    and_(
+                        EventRow.timestamp == query.cursor_timestamp,
+                        EventRow.event_id < query.cursor_id,
+                    ),
+                )
+            )
+
+        rows = list(
+            self._session.scalars(
+                statement.order_by(
+                    EventRow.timestamp.desc(),
+                    EventRow.event_id.desc(),
+                ).limit(query.limit + 1)
+            )
+        )
+        return EventPage(
+            items=tuple(event_from_row(row) for row in rows[: query.limit]),
+            has_more=len(rows) > query.limit,
+        )
 
     @staticmethod
     def _values(event: SecurityEvent) -> dict[str, object]:
@@ -157,3 +209,84 @@ class AlertRepository:
 
     def count(self) -> int:
         return self._session.scalar(select(func.count()).select_from(AlertRow)) or 0
+
+    def counts_by_severity(self) -> dict[str, int]:
+        statement = (
+            select(AlertRow.severity, func.count())
+            .group_by(AlertRow.severity)
+            .order_by(AlertRow.severity)
+        )
+        return {severity: count for severity, count in self._session.execute(statement)}
+
+    def counts_by_rule(self) -> dict[str, int]:
+        statement = (
+            select(AlertRow.rule_id, func.count())
+            .group_by(AlertRow.rule_id)
+            .order_by(AlertRow.rule_id)
+        )
+        return {rule_id: count for rule_id, count in self._session.execute(statement)}
+
+    def search(self, query: AlertQuery) -> AlertPage:
+        statement = select(AlertRow)
+        if query.start is not None:
+            statement = statement.where(AlertRow.timestamp >= query.start)
+        if query.end is not None:
+            statement = statement.where(AlertRow.timestamp < query.end)
+        if query.severity is not None:
+            statement = statement.where(AlertRow.severity == query.severity)
+        if query.rule_id is not None:
+            statement = statement.where(AlertRow.rule_id == query.rule_id)
+        if query.username is not None:
+            statement = statement.where(AlertRow.username.ilike(f"%{query.username}%"))
+        if query.source_ip is not None:
+            statement = statement.where(AlertRow.source_ip == query.source_ip)
+        if query.cursor_timestamp is not None and query.cursor_id is not None:
+            cursor_uuid = UUID(query.cursor_id)
+            statement = statement.where(
+                or_(
+                    AlertRow.timestamp < query.cursor_timestamp,
+                    and_(
+                        AlertRow.timestamp == query.cursor_timestamp,
+                        AlertRow.alert_id < cursor_uuid,
+                    ),
+                )
+            )
+
+        rows = list(
+            self._session.scalars(
+                statement.order_by(
+                    AlertRow.timestamp.desc(),
+                    AlertRow.alert_id.desc(),
+                ).limit(query.limit + 1)
+            )
+        )
+        page_rows = rows[: query.limit]
+        identifiers = [row.alert_id for row in page_rows]
+        evidence_by_alert: dict[UUID, list[str]] = {
+            identifier: [] for identifier in identifiers
+        }
+        if identifiers:
+            evidence_statement = (
+                select(AlertEventRow.alert_id, AlertEventRow.event_id)
+                .where(AlertEventRow.alert_id.in_(identifiers))
+                .order_by(AlertEventRow.alert_id, AlertEventRow.evidence_order)
+            )
+            for alert_id, event_id in self._session.execute(evidence_statement):
+                evidence_by_alert[alert_id].append(event_id)
+        alerts = tuple(
+            alert_from_row(row, tuple(evidence_by_alert[row.alert_id]))
+            for row in page_rows
+        )
+        return AlertPage(items=alerts, has_more=len(rows) > query.limit)
+
+    def evidence(self, alert_id: str) -> tuple[SecurityEvent, ...] | None:
+        identifier = UUID(alert_id)
+        if self._session.get(AlertRow, identifier) is None:
+            return None
+        statement = (
+            select(EventRow)
+            .join(AlertEventRow, AlertEventRow.event_id == EventRow.event_id)
+            .where(AlertEventRow.alert_id == identifier)
+            .order_by(AlertEventRow.evidence_order)
+        )
+        return tuple(event_from_row(row) for row in self._session.scalars(statement))

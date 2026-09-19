@@ -158,3 +158,18 @@ explicit UTC range -> detection service <- ordered events+
 The domain does not import SQLAlchemy. Repositories do not commit; application
 services own the transaction so an entire use case succeeds or rolls back as a
 unit. See [Persistence architecture](persistence.md) for the detailed model.
+
+## Sprint 5 web console
+
+```text
+Browser -> versioned FastAPI routes -> query/application services
+   ^                                      |
+   |                                      v
+static HTML/CSS/JS <- response schemas <- PostgreSQL repositories
+```
+
+The console is an API client rather than a privileged view into SQLAlchemy.
+Both UI and OpenAPI use the same response contracts. The application remains
+synchronous because its current database operations are bounded and
+synchronous. See [Web API architecture](web-api.md) for endpoint and security
+details.

@@ -24,6 +24,10 @@ Persistence changes also require a reviewed Alembic migration and, with the
 test database configured, `uv run alembic check`. Never edit a migration that
 has already been shared; add a new revision instead.
 
+API changes must preserve `/api/v1` compatibility, update OpenAPI response
+models, and include both success and failure tests. Frontend operations must
+remain usable without external CDNs or services.
+
 Do not include real security telemetry or secrets. New detections should have
 both positive and negative tests and explain their grouping key, threshold,
 time window, severity, and suppression behavior.

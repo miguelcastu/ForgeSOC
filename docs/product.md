@@ -61,12 +61,26 @@ introduced.
 - A database CLI for health checks, ingestion, detection, and basic statistics.
 - Docker Compose development infrastructure and isolated PostgreSQL tests.
 
+## Implemented in Sprint 5
+
+- A responsive analyst console served directly by ForgeSOC.
+- Dashboard metrics and visual event/severity distributions.
+- Filtered, cursor-paginated event and alert exploration.
+- Alert investigation with ordered evidence.
+- Browser-based canonical/raw JSONL import and synthetic scenario generation.
+- Browser-triggered detection with idempotent results.
+- Versioned FastAPI endpoints, OpenAPI, health checks, and request IDs.
+- An embedded HTML architecture guide and five-minute workshop script.
+- A containerized API service and complete PostgreSQL API tests.
+
 ## Current non-goals
 
 - A complete SIEM replacement
 - Endpoint agent or packet capture
 - Production telemetry ingestion
-- Web API or message broker
+- Message broker or streaming ingestion
+- Internet-facing multi-user deployment
+- Authentication and role-based access control
 - Machine-learning detection
 - Autonomous remediation
 - User interface
