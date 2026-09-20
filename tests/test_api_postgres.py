@@ -34,21 +34,26 @@ def api_client(api_engine: Engine) -> Iterator[TestClient]:
         class_=Session,
         expire_on_commit=False,
     )
+    truncate_tables = text(
+        "TRUNCATE audit_log, case_alerts, cases, alert_notes, "
+        "alert_events, alerts, events, users RESTART IDENTITY CASCADE"
+    )
     with api_engine.begin() as connection:
-        connection.execute(
-            text(
-                "TRUNCATE audit_log, case_alerts, cases, alert_notes, "
-                "alert_events, alerts, events, users RESTART IDENTITY CASCADE"
+        connection.execute(truncate_tables)
+    try:
+        with TestClient(create_app(factory)) as client:
+            bootstrap = client.post(
+                "/api/v1/auth/bootstrap",
+                json={"username": "admin", "password": "correct-horse-battery"},
             )
-        )
-    with TestClient(create_app(factory)) as client:
-        bootstrap = client.post(
-            "/api/v1/auth/bootstrap",
-            json={"username": "admin", "password": "correct-horse-battery"},
-        )
-        assert bootstrap.status_code == 200
-        client.headers["Authorization"] = f"Bearer {bootstrap.json()['access_token']}"
-        yield client
+            assert bootstrap.status_code == 200
+            client.headers["Authorization"] = (
+                f"Bearer {bootstrap.json()['access_token']}"
+            )
+            yield client
+    finally:
+        with api_engine.begin() as connection:
+            connection.execute(truncate_tables)
 
 
 def seed_brute_force(client: TestClient) -> dict[str, int]:

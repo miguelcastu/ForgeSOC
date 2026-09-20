@@ -83,10 +83,21 @@ jobs:
             sleep 1
           done
           curl --fail --silent http://127.0.0.1:8000/ > /dev/null
-          TOKEN=$(curl --fail --silent -X POST http://127.0.0.1:8000/api/v1/auth/bootstrap \
+          AUTH_STATUS=$(curl --fail --silent http://127.0.0.1:8000/api/v1/auth/status)
+          if printf '%s' "$AUTH_STATUS" | python -c \
+            'import json,sys; raise SystemExit(0 if json.load(sys.stdin)["initialized"] else 1)'; then
+            AUTH_OPERATION=login
+          else
+            AUTH_OPERATION=bootstrap
+          fi
+          AUTH_RESPONSE=$(curl --fail-with-body --silent --show-error -X POST \
+            "http://127.0.0.1:8000/api/v1/auth/$AUTH_OPERATION" \
             -H 'Content-Type: application/json' \
-            -d '{"username":"ci-admin","password":"ci-password-at-least-12"}' \
+            -d '{"username":"admin","password":"correct-horse-battery"}')
+          TOKEN=$(printf '%s' "$AUTH_RESPONSE" \
             | python -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
           curl --fail --silent http://127.0.0.1:8000/api/v1/stats \
+            -H "Authorization: Bearer $TOKEN" > /dev/null
+          curl --fail --silent http://127.0.0.1:8000/api/v1/coverage \
             -H "Authorization: Bearer $TOKEN" > /dev/null
           curl --fail --silent http://127.0.0.1:8000/api/openapi.json > /dev/null
