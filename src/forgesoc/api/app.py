@@ -3,7 +3,7 @@ import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Annotated, cast
@@ -33,14 +33,18 @@ from forgesoc.api.schemas import (
     CaseCreateRequest,
     CaseResponse,
     CaseUpdateRequest,
+    CoverageResponse,
     DemoSeedRequest,
     DetectionRequest,
     DetectionResponse,
+    DetectionRuleResponse,
     ErrorResponse,
     EventImportRequest,
     EventPageResponse,
     EventResponse,
+    EventTypeCoverageResponse,
     IngestionResponse,
+    LogCoverageResponse,
     LoginRequest,
     NormalizationIngestionResponse,
     NoteCreateRequest,
@@ -61,7 +65,9 @@ from forgesoc.api.security import (
     hash_password,
     verify_password,
 )
-from forgesoc.detection.brute_force import BruteForceDetector
+from forgesoc.detection.engine import DetectionEngine
+from forgesoc.detection.registry import default_detectors, detection_catalog
+from forgesoc.domain.models import EventType
 from forgesoc.ingestion.raw_jsonl import RawRecord
 from forgesoc.normalization.main import build_engine
 from forgesoc.normalization.models import NormalizationFailure, NormalizationSuccess
@@ -370,6 +376,71 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
     def stats(request: Request) -> StatsResponse:
         result = DatabaseStatsService(_session_factory(request)).get()
         return StatsResponse.from_domain(result)
+
+    @app.get(
+        "/api/v1/coverage",
+        response_model=CoverageResponse,
+        tags=["detections"],
+    )
+    def coverage(request: Request) -> CoverageResponse:
+        metadata = detection_catalog()
+        stats_result = DatabaseStatsService(_session_factory(request)).get()
+        log_types = sorted(
+            set(stats_result.events_by_source)
+            | {log_type for rule in metadata for log_type in rule.log_types}
+        )
+        by_log_type = []
+        for log_type in log_types:
+            matching = tuple(rule for rule in metadata if log_type in rule.log_types)
+            by_log_type.append(
+                LogCoverageResponse(
+                    log_type=log_type,
+                    telemetry_events=stats_result.events_by_source.get(log_type, 0),
+                    rule_ids=tuple(rule.rule_id for rule in matching),
+                    technique_ids=tuple(
+                        sorted(
+                            {
+                                item.technique_id
+                                for rule in matching
+                                for item in rule.mitre
+                            }
+                        )
+                    ),
+                )
+            )
+        techniques = {item.technique_id for rule in metadata for item in rule.mitre}
+        platforms = {platform for rule in metadata for platform in rule.platforms}
+        by_event_type = []
+        for event_type in EventType:
+            matching = tuple(
+                rule for rule in metadata if event_type in rule.event_types
+            )
+            by_event_type.append(
+                EventTypeCoverageResponse(
+                    event_type=event_type,
+                    telemetry_events=stats_result.events_by_type.get(
+                        event_type.value, 0
+                    ),
+                    rule_ids=tuple(rule.rule_id for rule in matching),
+                    technique_ids=tuple(
+                        sorted(
+                            {
+                                item.technique_id
+                                for rule in matching
+                                for item in rule.mitre
+                            }
+                        )
+                    ),
+                )
+            )
+        return CoverageResponse(
+            rule_count=len(metadata),
+            technique_count=len(techniques),
+            platform_count=len(platforms),
+            rules=tuple(DetectionRuleResponse.from_metadata(rule) for rule in metadata),
+            by_log_type=tuple(by_log_type),
+            by_event_type=tuple(by_event_type),
+        )
 
     @app.get(
         "/api/v1/events",
@@ -736,10 +807,26 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         tags=["operations"],
     )
     def scenarios() -> list[ScenarioResponse]:
-        return [
-            ScenarioResponse(name=name, description=scenario.description)
-            for name, scenario in sorted(SCENARIOS.items())
-        ]
+        responses = []
+        for name, scenario in sorted(SCENARIOS.items()):
+            events = tuple(
+                scenario.generate(
+                    TelemetryGenerator(name, 42, datetime(2026, 1, 1, tzinfo=UTC))
+                )
+            )
+            alerts = tuple(DetectionEngine(default_detectors()).process(events))
+            responses.append(
+                ScenarioResponse(
+                    name=name,
+                    description=scenario.description,
+                    event_count=len(events),
+                    event_types=tuple(sorted({event.event_type for event in events})),
+                    expected_rule_ids=tuple(
+                        sorted({alert.rule_id for alert in alerts})
+                    ),
+                )
+            )
+        return responses
 
     @app.post(
         "/api/v1/demo/seed",
@@ -775,7 +862,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         try:
             summary = DatabaseDetectionService(
                 _session_factory(request),
-                detector_factory=lambda: [BruteForceDetector()],
+                detector_factory=default_detectors,
             ).detect(payload.start, payload.end)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

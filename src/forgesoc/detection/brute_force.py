@@ -2,6 +2,7 @@ from collections import defaultdict, deque
 from datetime import timedelta
 from uuid import NAMESPACE_URL, uuid5
 
+from forgesoc.detection.catalog import DetectionMetadata, technique
 from forgesoc.domain.models import (
     Alert,
     AuthenticationOutcome,
@@ -14,6 +15,20 @@ from forgesoc.domain.models import (
 class BruteForceDetector:
     RULE_ID = "AUTH-BRUTEFORCE-001"
     RULE_TITLE = "Possible authentication brute force"
+    metadata = DetectionMetadata(
+        rule_id=RULE_ID,
+        title=RULE_TITLE,
+        description="One identity fails repeatedly from the same source.",
+        severity=Severity.HIGH,
+        platforms=("Windows", "Linux"),
+        log_types=("windows.security", "linux.ssh"),
+        event_types=(EventType.AUTHENTICATION_FAILURE,),
+        mitre=(
+            technique(
+                "T1110.001", "Brute Force: Password Guessing", "Credential Access"
+            ),
+        ),
+    )
     AUTHENTICATION_EVENT_TYPES = {
         EventType.AUTHENTICATION,
         EventType.AUTHENTICATION_SUCCESS,
@@ -27,9 +42,7 @@ class BruteForceDetector:
     ) -> None:
         self.threshold = threshold
         self.window = window
-        self._failures: dict[tuple[str, str], deque[SecurityEvent]] = defaultdict(
-            deque
-        )
+        self._failures: dict[tuple[str, str], deque[SecurityEvent]] = defaultdict(deque)
         self._alerted_keys: set[tuple[str, str]] = set()
 
     def process(self, event: SecurityEvent) -> list[Alert]:

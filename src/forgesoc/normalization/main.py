@@ -4,14 +4,17 @@ from pathlib import Path
 
 from forgesoc.ingestion.raw_jsonl import read_raw_records
 from forgesoc.normalization.engine import NormalizationEngine
-from forgesoc.normalization.linux_parser import LinuxSshNormalizer
+from forgesoc.normalization.linux_parser import LinuxAuditNormalizer, LinuxSshNormalizer
 from forgesoc.normalization.models import (
     NormalizationError,
     NormalizationFailure,
     NormalizationReport,
     NormalizationSuccess,
 )
-from forgesoc.normalization.windows_parser import WindowsAuthenticationNormalizer
+from forgesoc.normalization.windows_parser import (
+    WindowsAuthenticationNormalizer,
+    WindowsSysmonNormalizer,
+)
 from forgesoc.output.events_jsonl import write_events
 from forgesoc.output.rejections_jsonl import write_rejections
 
@@ -20,7 +23,9 @@ def build_engine() -> NormalizationEngine:
     return NormalizationEngine(
         [
             WindowsAuthenticationNormalizer(),
+            WindowsSysmonNormalizer(),
             LinuxSshNormalizer(),
+            LinuxAuditNormalizer(),
         ]
     )
 

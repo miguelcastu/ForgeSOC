@@ -22,9 +22,10 @@ when an observed limitation justifies them.
 | Database-backed replay and detection | Implemented |
 | Web console and versioned query API | Implemented |
 | Authentication, analyst workflow, and case management | Implemented |
+| Threat-informed Windows/Linux detections and MITRE coverage | Implemented |
 | Streaming | Planned |
 
-Current milestone: **Sprint 6 complete - authenticated analyst workflow**.
+Current milestone: **Sprint 7 complete - threat-informed detection coverage**.
 
 ## Implemented pipeline
 
@@ -58,6 +59,11 @@ The initial rule is `AUTH-BRUTEFORCE-001`:
 - high severity;
 - a successful login resets the tracked failures;
 - one alert per continuous burst to prevent alert spam.
+
+Sprint 7 adds password spraying, suspicious PowerShell, credential dumping,
+high-risk sudo, suspicious service persistence, and DNS beaconing rules. Every
+rule declares required telemetry, platforms, severity, and MITRE ATT&CK mapping
+in the executable detection catalog.
 
 ## Requirements
 
@@ -115,8 +121,9 @@ The included events and identifiers are entirely synthetic.
 
 ## Normalize source telemetry
 
-ForgeSOC currently normalizes Windows Security `4624`/`4625` records and
-structured Linux SSH authentication records into the same canonical schema.
+ForgeSOC normalizes Windows Security `4624`/`4625`/`4688`/`4697`, Sysmon
+`1`/`3`/`22`, structured Linux SSH, and Linux auditd execution, privilege,
+file, and service records into the same canonical schema.
 
 ```powershell
 uv run forgesoc-normalize --list-sources
@@ -232,6 +239,8 @@ tests/                 Unit and end-to-end pipeline tests
 - [Sprint 4](docs/sprints/sprint-04-postgresql.md)
 - [Sprint 5](docs/sprints/sprint-05-web-console.md)
 - [Sprint 6](docs/sprints/sprint-06-analyst-workflow.md)
+- [Sprint 7](docs/sprints/sprint-07-threat-informed-detections.md)
+- [Windows/Linux threat model](docs/threat-model/windows-linux.md)
 - [Scenario catalog](docs/scenarios.md)
 - [Normalization mappings](docs/normalization.md)
 - [Persistence architecture](docs/architecture/persistence.md)

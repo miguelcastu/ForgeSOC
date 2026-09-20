@@ -82,6 +82,15 @@ introduced.
 - Audited workflow and user-management actions.
 - Analyst workflow, case, user, and audit views in the web console.
 
+## Implemented in Sprint 7
+
+- A documented Windows/Linux threat model and repeatable detection workflow.
+- Seven enabled rules with typed MITRE ATT&CK and telemetry metadata.
+- Windows process, service, network, and DNS normalization.
+- Linux process, privilege, file, and service normalization.
+- Deterministic attack and benign scenarios with expected detection outcomes.
+- API and web coverage views by rule, technique, platform, and log source.
+
 ## Current non-goals
 
 - A complete SIEM replacement

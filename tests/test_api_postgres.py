@@ -75,7 +75,35 @@ def test_health_stats_and_scenarios(api_client: TestClient) -> None:
         "normal-activity",
         "brute-force",
         "credential-spraying",
+        "windows-credential-dumping",
+        "linux-privilege-escalation",
     }
+    assert all("expected_rule_ids" in item for item in scenarios)
+
+
+def test_detection_coverage_links_rules_logs_and_mitre(api_client: TestClient) -> None:
+    response = api_client.get("/api/v1/coverage")
+
+    assert response.status_code == 200
+    coverage = response.json()
+    assert coverage["rule_count"] == 7
+    assert coverage["technique_count"] >= 7
+    assert {item["log_type"] for item in coverage["by_log_type"]} >= {
+        "windows.security",
+        "windows.sysmon",
+        "linux.ssh",
+        "linux.auditd",
+    }
+    file_change = next(
+        item
+        for item in coverage["by_event_type"]
+        if item["event_type"] == "file.change"
+    )
+    assert file_change["rule_ids"] == []
+    power_shell = next(
+        rule for rule in coverage["rules"] if rule["rule_id"] == "WIN-POWERSHELL-003"
+    )
+    assert power_shell["mitre"][0]["technique_id"] == "T1059.001"
 
 
 def test_demo_detection_and_evidence_workflow_is_idempotent(
@@ -133,7 +161,7 @@ def test_event_filters_detail_and_cursor_pagination(api_client: TestClient) -> N
     assert first_page["next_cursor"] is not None
     assert len(identifiers) == 4
     assert detail.status_code == 200
-    assert detail.json()["source"] == "windows.eventlog"
+    assert detail.json()["source"] == "windows.security"
 
 
 def test_canonical_event_import_and_validation(api_client: TestClient) -> None:

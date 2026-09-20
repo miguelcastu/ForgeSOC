@@ -35,7 +35,7 @@ class NormalActivityScenario:
 
         yield generator.event(
             EventType.AUTHENTICATION_SUCCESS,
-            "windows.eventlog",
+            "windows.security",
             username=user,
             source_ip=source_ip,
             outcome=AuthenticationOutcome.SUCCESS,
@@ -91,7 +91,7 @@ class NormalActivityScenario:
         )
         yield generator.event(
             EventType.AUTHENTICATION_FAILURE,
-            "linux.auth",
+            "linux.ssh",
             after_seconds=18,
             username=generator.choice(USERS),
             source_ip=generator.choice(INTERNAL_IPS),
@@ -101,7 +101,7 @@ class NormalActivityScenario:
         )
         yield generator.event(
             EventType.AUTHENTICATION_SUCCESS,
-            "linux.auth",
+            "linux.ssh",
             after_seconds=8,
             username=generator.choice(USERS),
             source_ip=generator.choice(INTERNAL_IPS),
@@ -126,7 +126,7 @@ class BruteForceScenario:
         for attempt in range(1, 7):
             yield generator.event(
                 EventType.AUTHENTICATION_FAILURE,
-                "windows.eventlog",
+                "windows.security",
                 after_seconds=0 if attempt == 1 else 8,
                 username=user,
                 source_ip=source_ip,
@@ -156,7 +156,7 @@ class BruteForceThenSuccessScenario:
         for attempt in range(1, 6):
             yield generator.event(
                 EventType.AUTHENTICATION_FAILURE,
-                "linux.auth",
+                "linux.ssh",
                 after_seconds=0 if attempt == 1 else 9,
                 username=user,
                 source_ip=source_ip,
@@ -171,7 +171,7 @@ class BruteForceThenSuccessScenario:
 
         yield generator.event(
             EventType.AUTHENTICATION_SUCCESS,
-            "linux.auth",
+            "linux.ssh",
             after_seconds=7,
             username=user,
             source_ip=source_ip,
@@ -292,7 +292,7 @@ class CredentialSprayingScenario:
         for attempt, user in enumerate(USERS, start=1):
             yield generator.event(
                 EventType.AUTHENTICATION_FAILURE,
-                "windows.eventlog",
+                "windows.security",
                 after_seconds=0 if attempt == 1 else 6,
                 username=user,
                 source_ip=source_ip,
@@ -307,6 +307,114 @@ class CredentialSprayingScenario:
             )
 
 
+class WindowsCredentialDumpingScenario:
+    name = "windows-credential-dumping"
+    description = "Synthetic process activity consistent with LSASS credential access."
+
+    def generate(self, generator: TelemetryGenerator) -> Iterable[SecurityEvent]:
+        user = generator.choice(USERS)
+        host = generator.choice(WINDOWS_HOSTS)
+        yield generator.event(
+            EventType.PROCESS_START,
+            "windows.sysmon",
+            username=user,
+            host=host,
+            attributes={
+                "process_name": "procdump64.exe",
+                "parent_process": "cmd.exe",
+                "command_line": "procdump64.exe -ma lsass.exe synthetic-lsass.dmp",
+                "integrity_level": "high",
+            },
+        )
+
+
+class LinuxPrivilegeEscalationScenario:
+    name = "linux-privilege-escalation"
+    description = "A user invokes a root shell through sudo and changes a startup file."
+
+    def generate(self, generator: TelemetryGenerator) -> Iterable[SecurityEvent]:
+        user = generator.choice(USERS)
+        host = generator.choice(LINUX_HOSTS)
+        yield generator.event(
+            EventType.PRIVILEGE_USE,
+            "linux.auditd",
+            username=user,
+            host=host,
+            attributes={
+                "command_line": "sudo /bin/bash",
+                "target_user": "root",
+                "result": "success",
+            },
+        )
+        yield generator.event(
+            EventType.FILE_CHANGE,
+            "linux.auditd",
+            after_seconds=3,
+            username="root",
+            host=host,
+            attributes={"path": "/etc/cron.d/system-update", "action": "created"},
+        )
+
+
+class WindowsServicePersistenceScenario:
+    name = "windows-service-persistence"
+    description = "A Windows service is installed from a user-writable path."
+
+    def generate(self, generator: TelemetryGenerator) -> Iterable[SecurityEvent]:
+        yield generator.event(
+            EventType.SERVICE_INSTALL,
+            "windows.security",
+            username=generator.choice(USERS),
+            host=generator.choice(WINDOWS_HOSTS),
+            attributes={
+                "event_code": 4697,
+                "service_name": "SyntheticUpdater",
+                "service_path": "C:\\Users\\Public\\synthetic-updater.exe",
+                "start_type": "auto",
+            },
+        )
+
+
+class LinuxServicePersistenceScenario:
+    name = "linux-service-persistence"
+    description = "A systemd service is installed from a temporary path."
+
+    def generate(self, generator: TelemetryGenerator) -> Iterable[SecurityEvent]:
+        yield generator.event(
+            EventType.SERVICE_INSTALL,
+            "linux.auditd",
+            username="root",
+            host=generator.choice(LINUX_HOSTS),
+            attributes={
+                "service_name": "synthetic-update.service",
+                "service_path": "/tmp/synthetic-update",
+                "start_type": "enabled",
+            },
+        )
+
+
+class DnsBeaconingScenario:
+    name = "dns-beaconing"
+    description = "Repeated DNS queries from one host at regular intervals."
+
+    def generate(self, generator: TelemetryGenerator) -> Iterable[SecurityEvent]:
+        source_ip = generator.choice(INTERNAL_IPS)
+        host = generator.choice(WINDOWS_HOSTS)
+        for sequence in range(1, 7):
+            yield generator.event(
+                EventType.DNS_QUERY,
+                "windows.sysmon",
+                after_seconds=0 if sequence == 1 else 45,
+                source_ip=source_ip,
+                host=host,
+                attributes={
+                    "query": SUSPICIOUS_DOMAIN,
+                    "query_type": "A",
+                    "sequence": sequence,
+                },
+            )
+
+
 SCENARIOS: dict[str, Scenario] = {
     scenario.name: scenario
     for scenario in (
@@ -316,6 +424,11 @@ SCENARIOS: dict[str, Scenario] = {
         SuspiciousPowerShellScenario(),
         MaliciousDomainScenario(),
         CredentialSprayingScenario(),
+        WindowsCredentialDumpingScenario(),
+        LinuxPrivilegeEscalationScenario(),
+        WindowsServicePersistenceScenario(),
+        LinuxServicePersistenceScenario(),
+        DnsBeaconingScenario(),
     )
 }
 

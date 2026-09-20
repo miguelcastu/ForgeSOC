@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
 
+from forgesoc.detection.catalog import DetectionMetadata, MitreTechnique
+from forgesoc.detection.registry import metadata_for_rule
 from forgesoc.domain.models import (
     Alert,
     AlertDisposition,
@@ -54,6 +56,17 @@ class EventResponse(BaseModel):
         )
 
 
+class MitreTechniqueResponse(BaseModel):
+    technique_id: str
+    name: str
+    tactic: str
+    url: str
+
+    @classmethod
+    def from_domain(cls, item: MitreTechnique) -> "MitreTechniqueResponse":
+        return cls.model_validate(item, from_attributes=True)
+
+
 class AlertResponse(BaseModel):
     alert_id: str
     timestamp: datetime
@@ -67,9 +80,11 @@ class AlertResponse(BaseModel):
     status: AlertStatus
     assignee: str | None
     disposition: AlertDisposition | None
+    mitre_techniques: tuple[MitreTechniqueResponse, ...]
 
     @classmethod
     def from_domain(cls, alert: Alert) -> "AlertResponse":
+        metadata = metadata_for_rule(alert.rule_id)
         return cls(
             alert_id=alert.alert_id,
             timestamp=alert.timestamp,
@@ -83,6 +98,10 @@ class AlertResponse(BaseModel):
             status=alert.status,
             assignee=alert.assignee,
             disposition=alert.disposition,
+            mitre_techniques=tuple(
+                MitreTechniqueResponse.from_domain(item)
+                for item in (metadata.mitre if metadata else ())
+            ),
         )
 
 
@@ -237,6 +256,9 @@ class NormalizationIngestionResponse(BaseModel):
 class ScenarioResponse(BaseModel):
     name: str
     description: str
+    event_count: int
+    event_types: tuple[EventType, ...]
+    expected_rule_ids: tuple[str, ...]
 
 
 class ErrorResponse(BaseModel):
@@ -353,3 +375,52 @@ class AuditResponse(BaseModel):
     @classmethod
     def from_record(cls, audit: AuditRecord) -> "AuditResponse":
         return cls.model_validate(audit, from_attributes=True)
+
+
+class DetectionRuleResponse(BaseModel):
+    rule_id: str
+    title: str
+    description: str
+    severity: Severity
+    platforms: tuple[str, ...]
+    log_types: tuple[str, ...]
+    event_types: tuple[EventType, ...]
+    mitre: tuple[MitreTechniqueResponse, ...]
+
+    @classmethod
+    def from_metadata(cls, metadata: DetectionMetadata) -> "DetectionRuleResponse":
+        return cls(
+            rule_id=metadata.rule_id,
+            title=metadata.title,
+            description=metadata.description,
+            severity=metadata.severity,
+            platforms=metadata.platforms,
+            log_types=metadata.log_types,
+            event_types=metadata.event_types,
+            mitre=tuple(
+                MitreTechniqueResponse.from_domain(item) for item in metadata.mitre
+            ),
+        )
+
+
+class LogCoverageResponse(BaseModel):
+    log_type: str
+    telemetry_events: int
+    rule_ids: tuple[str, ...]
+    technique_ids: tuple[str, ...]
+
+
+class EventTypeCoverageResponse(BaseModel):
+    event_type: EventType
+    telemetry_events: int
+    rule_ids: tuple[str, ...]
+    technique_ids: tuple[str, ...]
+
+
+class CoverageResponse(BaseModel):
+    rule_count: int
+    technique_count: int
+    platform_count: int
+    rules: tuple[DetectionRuleResponse, ...]
+    by_log_type: tuple[LogCoverageResponse, ...]
+    by_event_type: tuple[EventTypeCoverageResponse, ...]

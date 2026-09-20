@@ -24,6 +24,8 @@ so they can be tested independently without introducing services or frameworks.
 | `detection/base.py` | Defines the structural contract every detector must satisfy. | Detection engine, type checkers | Domain models |
 | `detection/engine.py` | Sends every event through each configured detector and yields alerts. | Application entry point, tests | Detectors through their protocol |
 | `detection/brute_force.py` | Owns brute-force state, time windows, suppression, and alert creation. | Detection engine, unit tests | Domain models |
+| `detection/behavioral.py` | Implements spraying, execution, credential, privilege, persistence, and DNS analytics. | Detection registry, tests | Domain models and detection metadata |
+| `detection/registry.py` | Defines enabled rules and exposes coverage metadata. | CLI, API, coverage UI | Detector implementations |
 | `output/jsonl.py` | Serializes alerts as one JSON object per line. | Application entry point, tests | Domain models |
 | `main.py` | Composes the complete pipeline and exposes its command-line interface. | `forgesoc` console command | Ingestion, engine, detector, output |
 
@@ -66,6 +68,11 @@ the current 60-second window count toward the threshold.
 Once a key has alerted, continued failures in the same burst do not create an
 alert for every event. A successful login resets the state. If old failures
 expire and the count drops below the threshold, a future burst may alert again.
+
+Sprint 7 adds a common registry for every enabled detector. Each detector owns
+typed platform, log-source, event-type, severity, and MITRE ATT&CK metadata.
+The engine, CLI, API, scenario profiler, alert response, and coverage page all
+consume that registry so execution and documentation cannot drift silently.
 
 ## Intentional limitations
 

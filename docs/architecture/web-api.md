@@ -39,6 +39,7 @@ FastAPI generates OpenAPI from the response and request schemas.
 | `/api/v1/users` | Role-aware workspace user management. |
 | `/api/v1/cases` | Create and progress multi-alert investigations. |
 | `/api/v1/audit` | Review privileged workflow actions. |
+| `/api/v1/coverage` | Inspect enabled rules, log sources, and MITRE mappings. |
 | `/api/docs` | Interactive OpenAPI documentation. |
 
 ## Pagination
@@ -62,6 +63,7 @@ keep interaction fast.
   5,000-record request limit.
 - Deterministic scenario generation and idempotent detection execution.
 - Embedded architecture diagram, glossary, principles, and workshop script.
+- MITRE ATT&CK coverage matrix backed by the executable detector registry.
 
 ## Error and observability contract
 
@@ -84,7 +86,8 @@ limiting, secure secret storage, and a hardened browser-origin policy.
 ## Intentional limitations
 
 - API operations are synchronous.
-- The only active detection rule remains authentication brute force.
+- Detections remain synchronous and intentionally small; they are educational
+  hypotheses rather than environment-tuned production content.
 - Raw import supports the current structured Windows and Linux adapters, not
   native EVTX or unstructured syslog files.
 - Sessions are stateless and are invalidated by rotating the signing secret;

@@ -30,6 +30,11 @@ def generate(name: str, seed: int = 42) -> list[SecurityEvent]:
         ("suspicious-powershell", 2),
         ("malicious-domain", 3),
         ("credential-spraying", 8),
+        ("windows-credential-dumping", 1),
+        ("linux-privilege-escalation", 2),
+        ("windows-service-persistence", 1),
+        ("linux-service-persistence", 1),
+        ("dns-beaconing", 6),
     ],
 )
 def test_scenarios_generate_ordered_unique_events(
@@ -47,9 +52,7 @@ def test_scenarios_generate_ordered_unique_events(
 
 
 def test_generation_is_deterministic() -> None:
-    assert generate("normal-activity", seed=73) == generate(
-        "normal-activity", seed=73
-    )
+    assert generate("normal-activity", seed=73) == generate("normal-activity", seed=73)
 
 
 def test_same_inputs_create_byte_identical_datasets(tmp_path: Path) -> None:
@@ -76,6 +79,9 @@ def test_scenarios_cover_all_planned_event_types() -> None:
         EventType.NETWORK_CONNECTION,
         EventType.DNS_QUERY,
         EventType.HTTP_REQUEST,
+        EventType.PRIVILEGE_USE,
+        EventType.SERVICE_INSTALL,
+        EventType.FILE_CHANGE,
     }
 
 

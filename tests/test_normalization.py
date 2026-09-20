@@ -67,6 +67,44 @@ def linux_envelope(
     }
 
 
+def sysmon_envelope(event_code: int = 1) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "EventID": event_code,
+        "UtcTime": "2026-09-20T10:00:00Z",
+        "Computer": "WS-FIN-021",
+        "User": "marta.soler",
+        "Image": "powershell.exe",
+    }
+    if event_code == 1:
+        payload.update(
+            {
+                "CommandLine": "powershell.exe -EncodedCommand U3ludGhldGlj",
+                "ParentImage": "WINWORD.EXE",
+            }
+        )
+    elif event_code == 22:
+        payload["QueryName"] = "cdn-security-update.test"
+    return {
+        "source_type": "windows.sysmon",
+        "record_id": "sysmon-1",
+        "payload": payload,
+    }
+
+
+def auditd_envelope(record_type: str = "USER_CMD") -> dict[str, object]:
+    payload: dict[str, object] = {
+        "timestamp": "2026-09-20T10:00:00Z",
+        "hostname": "lnx-jump-01",
+        "record_type": record_type,
+        "user": "marta.soler",
+    }
+    if record_type == "USER_CMD":
+        payload.update({"command_line": "sudo /bin/bash", "target_user": "root"})
+    elif record_type == "PATH":
+        payload.update({"path": "/etc/cron.d/update", "action": "created"})
+    return {"source_type": "linux.auditd", "record_id": "audit-1", "payload": payload}
+
+
 def raw_record(data: object, line_number: int = 1) -> RawRecord:
     return RawRecord(
         input_path=Path("synthetic.jsonl"),
@@ -76,9 +114,7 @@ def raw_record(data: object, line_number: int = 1) -> RawRecord:
 
 
 def normalize_one(data: object) -> NormalizationSuccess:
-    results = list(
-        build_engine().normalize([raw_record(data)], continue_on_error=True)
-    )
+    results = list(build_engine().normalize([raw_record(data)], continue_on_error=True))
     assert len(results) == 1
     result = results[0]
     assert isinstance(result, NormalizationSuccess)
@@ -127,6 +163,26 @@ def test_linux_success_maps_to_canonical_success() -> None:
     assert event.outcome == AuthenticationOutcome.SUCCESS
 
 
+def test_sysmon_process_and_dns_events_are_normalized() -> None:
+    process = normalize_one(sysmon_envelope()).event
+    dns = normalize_one(sysmon_envelope(22)).event
+
+    assert process.event_type == EventType.PROCESS_START
+    assert process.attributes["parent_process"] == "WINWORD.EXE"
+    assert dns.event_type == EventType.DNS_QUERY
+    assert dns.attributes["query"] == "cdn-security-update.test"
+
+
+def test_linux_audit_privilege_and_file_events_are_normalized() -> None:
+    privilege = normalize_one(auditd_envelope()).event
+    file_change = normalize_one(auditd_envelope("PATH")).event
+
+    assert privilege.event_type == EventType.PRIVILEGE_USE
+    assert privilege.attributes["target_user"] == "root"
+    assert file_change.event_type == EventType.FILE_CHANGE
+    assert file_change.attributes["path"] == "/etc/cron.d/update"
+
+
 def test_event_identity_is_stable_and_source_scoped() -> None:
     first = normalize_one(windows_envelope()).event
     repeated = normalize_one(windows_envelope()).event
@@ -162,7 +218,7 @@ def test_event_identity_is_stable_and_source_scoped() -> None:
             NormalizationErrorCode.UNSUPPORTED_SOURCE,
         ),
         (
-            json.dumps(windows_envelope(event_code=4688)),
+            json.dumps(windows_envelope(event_code=9999)),
             NormalizationErrorCode.UNSUPPORTED_EVENT,
         ),
         (
@@ -221,9 +277,7 @@ def test_continue_mode_writes_events_rejections_and_report(tmp_path: Path) -> No
     assert report.by_error_code == {"invalid_field": 1}
     assert len(list(read_events(output_path))) == 1
 
-    rejections = [
-        json.loads(line) for line in rejected_path.read_text().splitlines()
-    ]
+    rejections = [json.loads(line) for line in rejected_path.read_text().splitlines()]
     assert rejections[0]["error_code"] == "invalid_field"
     assert "payload" not in rejections[0]
 
@@ -257,6 +311,25 @@ def test_raw_brute_force_dataset_generates_one_alert(
     assert report.events_normalized == 5
     assert report.events_rejected == 0
     assert alert_count == 1
+
+
+@pytest.mark.parametrize(
+    ("raw_dataset", "expected_count"),
+    [
+        (Path("data/raw/windows_activity.jsonl"), 3),
+        (Path("data/raw/linux_activity.jsonl"), 4),
+    ],
+)
+def test_activity_datasets_normalize_multiple_log_families(
+    raw_dataset: Path, expected_count: int, tmp_path: Path
+) -> None:
+    normalized_path = tmp_path / f"{raw_dataset.stem}-normalized.jsonl"
+
+    report = run_normalization(raw_dataset, normalized_path)
+
+    assert report.events_normalized == expected_count
+    assert report.events_rejected == 0
+    assert len(list(read_events(normalized_path))) == expected_count
 
 
 def test_normalization_output_is_reproducible(tmp_path: Path) -> None:

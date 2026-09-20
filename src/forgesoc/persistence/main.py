@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from forgesoc.detection.brute_force import BruteForceDetector
+from forgesoc.detection.registry import default_detectors
 from forgesoc.ingestion.jsonl import read_events
 from forgesoc.persistence.config import (
     DatabaseConfig,
@@ -77,7 +77,7 @@ def _run_command(args: argparse.Namespace, session_factory: SessionFactory) -> N
     if args.command == "detect":
         service = DatabaseDetectionService(
             session_factory,
-            detector_factory=lambda: [BruteForceDetector()],
+            detector_factory=default_detectors,
         )
         detection_summary = service.detect(args.start, args.end)
         print(f"Events processed: {detection_summary.events_processed}")

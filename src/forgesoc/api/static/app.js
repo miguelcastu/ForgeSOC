@@ -62,13 +62,14 @@ function queryString(values) {
 function switchView(name) {
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${name}`));
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
-  const titles = { dashboard: "Security overview", events: "Event explorer", alerts: "Alert investigation", cases: "Investigation cases", admin: "Administration", workshop: "Architecture & workshop" };
+  const titles = { dashboard: "Security overview", events: "Event explorer", alerts: "Alert investigation", cases: "Investigation cases", coverage: "MITRE detection coverage", admin: "Administration", workshop: "Architecture & workshop" };
   $("#page-title").textContent = titles[name];
   window.location.hash = name;
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (name === "events") loadEvents(true);
   if (name === "alerts") loadAlerts(true);
   if (name === "cases") loadCases();
+  if (name === "coverage") loadCoverage();
   if (name === "admin") loadAdmin();
 }
 
@@ -267,7 +268,8 @@ async function openAlert(id) {
     const userOptions = state.users.map((user) => `<option value="${esc(user.user_id)}" ${user.username === alert.assignee ? "selected" : ""}>${esc(user.username)}</option>`).join("");
     const workflow = state.user?.role === "viewer" ? "" : `<form class="workflow-form" id="alert-workflow"><label>Status<select name="status"><option ${alert.status === "open" ? "selected" : ""}>open</option><option ${alert.status === "investigating" ? "selected" : ""}>investigating</option><option ${alert.status === "closed" ? "selected" : ""}>closed</option></select></label><label>Assignee<select name="assignee_user_id"><option value="">Unassigned</option>${userOptions}</select></label><label>Disposition<select name="disposition"><option value="">None</option><option ${alert.disposition === "true_positive" ? "selected" : ""}>true_positive</option><option ${alert.disposition === "false_positive" ? "selected" : ""}>false_positive</option><option ${alert.disposition === "benign" ? "selected" : ""}>benign</option></select></label><button class="button primary">Save workflow</button></form>`;
     const noteForm = state.user?.role === "viewer" ? "" : `<form class="inline-form note-form" id="alert-note"><input name="body" required placeholder="Add investigation note"><button class="button ghost">Add note</button></form>`;
-    openDrawer(`<span class="eyebrow">ALERT INVESTIGATION</span><h2 class="detail-title">${esc(alert.title)}</h2><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span> <span class="badge ${esc(alert.status)}">${esc(alert.status)}</span><p class="detail-reason">${esc(alert.reason)}</p><div class="detail-grid"><div><small>Rule</small><b>${esc(alert.rule_id)}</b></div><div><small>Detected</small><b>${formatDate(alert.timestamp)}</b></div><div><small>Username</small><b>${esc(alert.username)}</b></div><div><small>Source IP</small><b>${esc(alert.source_ip)}</b></div><div><small>Owner</small><b>${esc(alert.assignee)}</b></div><div><small>Disposition</small><b>${esc(alert.disposition)}</b></div></div>${workflow}<span class="eyebrow">INVESTIGATION NOTES</span>${noteForm}<div class="evidence-list">${notes.map((note) => `<div class="evidence-item"><b>${esc(note.author)} · ${formatDate(note.created_at)}</b><span>${esc(note.body)}</span></div>`).join("") || '<div class="empty-state">No notes yet</div>'}</div><span class="eyebrow">ORDERED EVIDENCE</span><div class="evidence-list">${evidence.map((event, index) => `<div class="evidence-item" data-evidence-id="${esc(event.event_id)}"><b>${String(index + 1).padStart(2, "0")} · ${esc(event.event_type)} · ${esc(event.username)}</b><span>${formatDate(event.timestamp)} · ${esc(event.source_ip)} · ${esc(event.event_id)}</span></div>`).join("")}</div>`);
+    const mitre = alert.mitre_techniques.map((item) => `<a class="mitre-link" href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(item.technique_id)} · ${esc(item.name)}</a>`).join("");
+    openDrawer(`<span class="eyebrow">ALERT INVESTIGATION</span><h2 class="detail-title">${esc(alert.title)}</h2><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span> <span class="badge ${esc(alert.status)}">${esc(alert.status)}</span><p class="detail-reason">${esc(alert.reason)}</p><div class="detail-grid"><div><small>Rule</small><b>${esc(alert.rule_id)}</b></div><div><small>Detected</small><b>${formatDate(alert.timestamp)}</b></div><div><small>Username</small><b>${esc(alert.username)}</b></div><div><small>Source IP</small><b>${esc(alert.source_ip)}</b></div><div><small>Owner</small><b>${esc(alert.assignee)}</b></div><div><small>Disposition</small><b>${esc(alert.disposition)}</b></div></div><div class="mitre-list">${mitre}</div>${workflow}<span class="eyebrow">INVESTIGATION NOTES</span>${noteForm}<div class="evidence-list">${notes.map((note) => `<div class="evidence-item"><b>${esc(note.author)} · ${formatDate(note.created_at)}</b><span>${esc(note.body)}</span></div>`).join("") || '<div class="empty-state">No notes yet</div>'}</div><span class="eyebrow">ORDERED EVIDENCE</span><div class="evidence-list">${evidence.map((event, index) => `<div class="evidence-item" data-evidence-id="${esc(event.event_id)}"><b>${String(index + 1).padStart(2, "0")} · ${esc(event.event_type)} · ${esc(event.username)}</b><span>${formatDate(event.timestamp)} · ${esc(event.source_ip)} · ${esc(event.event_id)}</span></div>`).join("")}</div>`);
     $$('[data-evidence-id]', $("#drawer-content")).forEach((item) => item.addEventListener("click", () => openEvent(item.dataset.evidenceId)));
     $("#alert-workflow")?.addEventListener("submit", async (event) => { event.preventDefault(); const values = formValues(event.target); values.disposition ||= null; values.assignee_user_id ||= null; try { await api(`/api/v1/alerts/${id}/workflow`, { method: "PATCH", body: JSON.stringify(values) }); toast("Alert workflow updated"); await openAlert(id); loadAlerts(true); } catch (error) { toast(error.message, "error"); } });
     $("#alert-note")?.addEventListener("submit", async (event) => { event.preventDefault(); try { await api(`/api/v1/alerts/${id}/notes`, { method: "POST", body: JSON.stringify(formValues(event.target)) }); toast("Investigation note added"); await openAlert(id); } catch (error) { toast(error.message, "error"); } });
@@ -286,7 +288,9 @@ async function loadScenarios() {
 
 function updateScenarioDescription() {
   const selected = state.scenarios.find((item) => item.name === $("#scenario-select").value);
-  $("#scenario-description").textContent = selected?.description || "";
+  if (!selected) { $("#scenario-description").textContent = ""; return; }
+  const rules = selected.expected_rule_ids.length ? selected.expected_rule_ids.join(", ") : "normal activity / no expected alert";
+  $("#scenario-description").textContent = `${selected.description} ${selected.event_count} events · ${selected.event_types.join(", ")} · Expected: ${rules}`;
 }
 
 function modal(open) {
@@ -348,6 +352,21 @@ async function loadCases() {
     const cases = await api("/api/v1/cases");
     $("#nav-cases").textContent = cases.length;
     $("#cases-grid").innerHTML = cases.map((item) => `<article class="alert-card"><div class="alert-top"><span><span class="badge ${esc(item.priority)}">${esc(item.priority)}</span> <span class="badge ${esc(item.status)}">${esc(item.status)}</span></span><time class="subline">${formatDate(item.updated_at)}</time></div><h3>${esc(item.title)}</h3><p>${esc(item.description || "No description")}</p><div class="alert-meta"><span>${esc(item.assignee || "unassigned")}</span><span>${item.alert_ids.length} alerts</span><span>${esc(item.case_id)}</span></div></article>`).join("") || '<div class="empty-state">No cases created</div>';
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function loadCoverage() {
+  try {
+    const coverage = await api("/api/v1/coverage");
+    $("#coverage-rules").textContent = coverage.rule_count;
+    $("#coverage-techniques").textContent = coverage.technique_count;
+    $("#coverage-platforms").textContent = coverage.platform_count;
+    $("#coverage-sources").textContent = coverage.by_log_type.length;
+    $("#nav-rules").textContent = coverage.rule_count;
+    $("#coverage-matrix").innerHTML = coverage.by_log_type.map((item) => `<div class="coverage-row"><div><b>${esc(item.log_type)}</b><small>${item.telemetry_events} stored events</small></div><span>${item.rule_ids.length} rules</span><div>${item.technique_ids.map((id) => `<span class="badge">${esc(id)}</span>`).join(" ") || '<span class="badge gap">GAP</span>'}</div></div>`).join("");
+    const gaps = coverage.by_event_type.filter((item) => item.rule_ids.length === 0);
+    $("#coverage-gaps").innerHTML = gaps.map((item) => `<div class="evidence-item"><b>${esc(item.event_type)}</b><span>${item.telemetry_events} stored events · no mapped rule.</span></div>`).join("") || '<div class="evidence-item"><b>No catalog gaps</b><span>Every canonical event type has at least one mapped rule.</span></div>';
+    $("#rule-catalog").innerHTML = coverage.rules.map((rule) => `<article class="rule-card"><div><span class="badge ${esc(rule.severity)}">${esc(rule.severity)}</span><span class="event-type">${esc(rule.rule_id)}</span></div><h4>${esc(rule.title)}</h4><p>${esc(rule.description)}</p><small>${rule.platforms.map(esc).join(" · ")} / ${rule.log_types.map(esc).join(" · ")}</small><div class="mitre-list">${rule.mitre.map((item) => `<a class="mitre-link" href="${esc(item.url)}" target="_blank" rel="noreferrer">${esc(item.technique_id)} · ${esc(item.name)}</a>`).join("")}</div></article>`).join("");
   } catch (error) { toast(error.message, "error"); }
 }
 
@@ -419,7 +438,7 @@ function bindEvents() {
 async function startWorkspace() {
   await loadUsers();
   const initial = window.location.hash.slice(1);
-  if (["dashboard", "events", "alerts", "cases", "admin", "workshop"].includes(initial)) switchView(initial);
+  if (["dashboard", "events", "alerts", "cases", "coverage", "admin", "workshop"].includes(initial)) switchView(initial);
   await Promise.all([refreshAll(), loadScenarios()]);
 }
 

@@ -18,6 +18,9 @@ class EventType(StrEnum):
     NETWORK_CONNECTION = "network.connection"
     DNS_QUERY = "dns.query"
     HTTP_REQUEST = "http.request"
+    PRIVILEGE_USE = "privilege.use"
+    SERVICE_INSTALL = "service.install"
+    FILE_CHANGE = "file.change"
 
 
 class AuthenticationOutcome(StrEnum):

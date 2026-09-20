@@ -1,0 +1,4 @@
+{"source_type":"linux.auditd","record_id":"audit-0001","payload":{"timestamp":"2026-09-20T10:00:00Z","hostname":"lnx-jump-01","record_type":"EXECVE","user":"bruno.santos","executable":"/usr/bin/curl","command_line":"curl https://updates.example/package"}}
+{"source_type":"linux.auditd","record_id":"audit-0002","payload":{"timestamp":"2026-09-20T10:00:10Z","hostname":"lnx-jump-01","record_type":"USER_CMD","user":"bruno.santos","command_line":"sudo /bin/bash","target_user":"root"}}
+{"source_type":"linux.auditd","record_id":"audit-0003","payload":{"timestamp":"2026-09-20T10:00:20Z","hostname":"lnx-jump-01","record_type":"PATH","user":"root","path":"/etc/cron.d/system-update","action":"created"}}
+{"source_type":"linux.auditd","record_id":"audit-0004","payload":{"timestamp":"2026-09-20T10:00:30Z","hostname":"lnx-jump-01","record_type":"SERVICE_START","user":"root","service_name":"synthetic-update.service","service_path":"/tmp/synthetic-update"}}

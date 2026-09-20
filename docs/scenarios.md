@@ -37,7 +37,7 @@ Expected current alerts: **1**.
 A synthetic Word process launches PowerShell with `-EncodedCommand`. The encoded
 value contains a harmless ForgeSOC test marker, not an executable payload.
 
-Expected current alerts: **0** until a process detector is implemented.
+Expected current alerts: **1** (`WIN-POWERSHELL-003`).
 
 ## `malicious-domain`
 
@@ -52,4 +52,36 @@ One source IP attempts one authentication against eight different users. It is
 deliberately a negative case for the current detector, which groups failures by
 both username and source IP.
 
-Expected current alerts: **0**. The dataset motivates a future spraying rule.
+Expected current alerts: **1** (`AUTH-SPRAY-002`).
+
+## `windows-credential-dumping`
+
+A synthetic ProcDump command targets LSASS. No real credential material or
+executable payload is included.
+
+Expected current alerts: **1** (`OS-CREDDUMP-004`).
+
+## `linux-privilege-escalation`
+
+A user invokes a root shell through sudo and then creates a synthetic cron path.
+
+Expected current alerts: **1** (`LNX-SUDO-005`). The file change is intentionally
+retained as a visible future coverage gap.
+
+## `windows-service-persistence`
+
+A Windows service points to a synthetic executable under `Users\\Public`.
+
+Expected current alerts: **1** (`OS-SERVICE-006`).
+
+## `linux-service-persistence`
+
+A systemd-style service points to a synthetic executable under `/tmp`.
+
+Expected current alerts: **1** (`OS-SERVICE-006`).
+
+## `dns-beaconing`
+
+Six DNS queries for a reserved test domain occur at 45-second intervals.
+
+Expected current alerts: **1** (`NET-DNS-BEACON-007`).

@@ -13,6 +13,8 @@ uv run forgesoc data/security_events.jsonl data/alerts.jsonl
 ## Test layers
 
 - `tests/test_brute_force.py` isolates detector behavior and its state changes.
+- `tests/test_behavioral_detections.py` validates every threat-informed rule,
+  benign activity, and completeness of the MITRE metadata catalog.
 - `tests/test_pipeline.py` exercises ingestion, detection, and output together
   using the committed synthetic dataset and a temporary output file.
 - `tests/test_simulation.py` verifies deterministic generation, event contracts,

@@ -1,12 +1,10 @@
 import argparse
 from pathlib import Path
 
-from forgesoc.detection.brute_force import (
-    BruteForceDetector,
-)
 from forgesoc.detection.engine import (
     DetectionEngine,
 )
+from forgesoc.detection.registry import default_detectors
 from forgesoc.ingestion.jsonl import (
     read_events,
 )
@@ -23,11 +21,7 @@ def run(
         input_path
     )
 
-    engine = DetectionEngine(
-        detectors=[
-            BruteForceDetector(),
-        ]
-    )
+    engine = DetectionEngine(detectors=default_detectors())
 
     alerts = engine.process(
         events

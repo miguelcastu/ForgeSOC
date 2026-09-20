@@ -86,7 +86,8 @@ schema, and upgrades again before running tests.
 - Processing is synchronous and single-process.
 - There is no checkpoint, scheduler, late-event policy, retention policy, or
   partitioning strategy yet.
-- Only the brute-force detector is composed by the database CLI.
+- The database CLI composes the same typed detector registry as the API and
+  file pipeline, keeping enabled rules consistent across execution paths.
 - Database credentials and production operations remain deployment concerns;
   the Compose service is development-only.
 

@@ -42,6 +42,9 @@
         <button class="nav-item" data-view="cases">
           <span class="nav-icon">□</span><span>Cases</span><b id="nav-cases">0</b>
         </button>
+        <button class="nav-item" data-view="coverage">
+          <span class="nav-icon">◫</span><span>Coverage</span><b id="nav-rules">0</b>
+        </button>
         <button class="nav-item admin-only" data-view="admin">
           <span class="nav-icon">◎</span><span>Admin</span>
         </button>
@@ -163,6 +166,12 @@
         <div class="case-grid" id="cases-grid"><div class="empty-state">No cases created</div></div>
       </section>
 
+      <section class="view" id="view-coverage">
+        <div class="section-intro"><div><span class="eyebrow">MITRE ATT&amp;CK</span><h2>Detection coverage</h2><p>Connect threat hypotheses, required telemetry, rules and ATT&amp;CK techniques.</p></div></div>
+        <div class="metric-grid"><article class="metric-card cyan"><span>Detection rules</span><strong id="coverage-rules">—</strong><small>Enabled by default</small></article><article class="metric-card violet"><span>ATT&amp;CK techniques</span><strong id="coverage-techniques">—</strong><small>Mapped behavior</small></article><article class="metric-card lime"><span>Platforms</span><strong id="coverage-platforms">—</strong><small>Windows and Linux</small></article><article class="metric-card coral"><span>Telemetry sources</span><strong id="coverage-sources">—</strong><small>Required log types</small></article></div>
+        <div class="dashboard-grid"><article class="panel span-two"><div class="panel-title"><div><span class="eyebrow">LOG COVERAGE</span><h3>Rules by telemetry source</h3></div></div><div class="coverage-matrix" id="coverage-matrix"></div></article><article class="panel"><div class="panel-title"><div><span class="eyebrow">GAPS</span><h3>Collection without detection</h3></div></div><div class="evidence-list" id="coverage-gaps"></div></article><article class="panel span-three"><div class="panel-title"><div><span class="eyebrow">RULE CATALOG</span><h3>Detection engineering inventory</h3></div></div><div class="rule-grid" id="rule-catalog"></div></article></div>
+      </section>
+
       <section class="view" id="view-admin">
         <div class="section-intro"><div><span class="eyebrow">ACCESS &amp; ACCOUNTABILITY</span><h2>Administration</h2><p>Manage analysts and inspect the immutable activity trail.</p></div></div>
         <div class="workshop-grid">
@@ -182,13 +191,13 @@
         <article class="architecture panel">
           <div class="panel-title"><div><span class="eyebrow">SYSTEM ARCHITECTURE</span><h3>One signal, explicit boundaries</h3></div><span class="architecture-note">Synchronous · typed · testable</span></div>
           <div class="architecture-flow">
-            <div class="arch-node raw"><span>01</span><b>Source telemetry</b><small>Windows 4624/4625<br>Linux SSH</small></div>
+            <div class="arch-node raw"><span>01</span><b>Source telemetry</b><small>Windows Security/Sysmon<br>Linux SSH/auditd</small></div>
             <div class="flow-arrow"><i></i><small>validate</small></div>
             <div class="arch-node canonical"><span>02</span><b>Normalization</b><small>Pydantic adapters<br>Canonical event v1</small></div>
             <div class="flow-arrow"><i></i><small>persist</small></div>
             <div class="arch-node storage"><span>03</span><b>PostgreSQL</b><small>JSONB + INET<br>Idempotent writes</small></div>
             <div class="flow-arrow"><i></i><small>replay</small></div>
-            <div class="arch-node detect"><span>04</span><b>Detection</b><small>Sliding windows<br>Deterministic alerts</small></div>
+            <div class="arch-node detect"><span>04</span><b>Detection</b><small>7 typed rules<br>MITRE metadata</small></div>
             <div class="flow-arrow"><i></i><small>investigate</small></div>
             <div class="arch-node console"><span>05</span><b>Web console</b><small>API + evidence<br>Analyst workflow</small></div>
           </div>
