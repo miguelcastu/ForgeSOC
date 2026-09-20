@@ -7,6 +7,8 @@ and SOC platform engineering through working code.
 The project deliberately starts as a small synchronous Python application.
 Infrastructure such as databases, APIs, and message brokers will only be added
 when an observed limitation justifies them.
+<img width="1886" height="837" alt="image" src="https://github.com/user-attachments/assets/4d1260a7-b2dc-4523-8185-decef10ae19d" />
+
 
 ## Project status
 
