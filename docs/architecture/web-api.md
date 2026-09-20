@@ -14,7 +14,7 @@ browser
   |
   +-- static HTML/CSS/JavaScript
   |
-  +-- /api/v1/* -> FastAPI validation -> repositories -> PostgreSQL
+  +-- bearer session -> /api/v1/* -> FastAPI validation -> repositories -> PostgreSQL
                          |
                          +-> domain models -> response schemas
 ```
@@ -35,6 +35,10 @@ FastAPI generates OpenAPI from the response and request schemas.
 | `/api/v1/scenarios` | Discover deterministic synthetic datasets. |
 | `/api/v1/demo/seed` | Generate and ingest a selected safe scenario. |
 | `/api/v1/detections/run` | Replay a bounded range through current rules. |
+| `/api/v1/auth/*` | Bootstrap, login, and current-user identity. |
+| `/api/v1/users` | Role-aware workspace user management. |
+| `/api/v1/cases` | Create and progress multi-alert investigations. |
+| `/api/v1/audit` | Review privileged workflow actions. |
 | `/api/docs` | Interactive OpenAPI documentation. |
 
 ## Pagination
@@ -67,12 +71,15 @@ expose connection URLs, SQL, or credentials.
 
 ## Security boundary
 
-This sprint is a local educational console, not an internet-facing service.
-There is no authentication or authorization. The launcher binds to localhost
-and the Compose port is intended only for a trusted development machine.
+Protected API routes require a signed eight-hour bearer token. Passwords are
+stored using salted PBKDF2-SHA256 hashes. Roles separate administration,
+analyst mutations, and read-only access. Workflow mutations create audit-log
+records. The bootstrap endpoint works only while the user table is empty.
 
-Before any shared deployment, add authentication, roles, TLS termination,
-CSRF/origin policy for mutations, rate limiting, and audited operator actions.
+This remains a local educational console. The launcher binds to localhost and
+the Compose port is intended for a trusted development machine. A public
+deployment still requires TLS termination, centralized identity/MFA, rate
+limiting, secure secret storage, and a hardened browser-origin policy.
 
 ## Intentional limitations
 
@@ -80,6 +87,7 @@ CSRF/origin policy for mutations, rate limiting, and audited operator actions.
 - The only active detection rule remains authentication brute force.
 - Raw import supports the current structured Windows and Linux adapters, not
   native EVTX or unstructured syslog files.
-- There is no alert assignment, status, comments, or case management yet.
+- Sessions are stateless and are invalidated by rotating the signing secret;
+  there is no per-session revocation list yet.
 - Demo event identities are deterministic, so repeating a scenario reports
   duplicates rather than creating another run.

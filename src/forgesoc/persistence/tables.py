@@ -63,12 +63,26 @@ class EventRow(Base):
     )
 
 
+class UserRow(Base):
+    __tablename__ = "users"
+
+    user_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    active: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class AlertRow(Base):
     __tablename__ = "alerts"
     __table_args__ = (
         Index("ix_alerts_timestamp", "timestamp"),
         Index("ix_alerts_rule_id_timestamp", "rule_id", "timestamp"),
         Index("ix_alerts_severity_timestamp", "severity", "timestamp"),
+        Index("ix_alerts_status_timestamp", "status", "timestamp"),
     )
 
     alert_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
@@ -79,6 +93,14 @@ class AlertRow(Base):
     username: Mapped[str | None] = mapped_column(Text)
     source_ip: Mapped[str | None] = mapped_column(INET)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    assignee_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL")
+    )
+    disposition: Mapped[str | None] = mapped_column(String(32))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -88,9 +110,7 @@ class AlertRow(Base):
 
 class AlertEventRow(Base):
     __tablename__ = "alert_events"
-    __table_args__ = (
-        UniqueConstraint("alert_id", "evidence_order"),
-    )
+    __table_args__ = (UniqueConstraint("alert_id", "evidence_order"),)
 
     alert_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -103,3 +123,75 @@ class AlertEventRow(Base):
         primary_key=True,
     )
     evidence_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AlertNoteRow(Base):
+    __tablename__ = "alert_notes"
+
+    note_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    alert_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("alerts.alert_id", ondelete="CASCADE")
+    )
+    author_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="RESTRICT")
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CaseRow(Base):
+    __tablename__ = "cases"
+
+    case_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
+    priority: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    assignee_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL")
+    )
+    created_by_user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class CaseAlertRow(Base):
+    __tablename__ = "case_alerts"
+
+    case_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("cases.case_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    alert_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("alerts.alert_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
+class AuditLogRow(Base):
+    __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_log_timestamp", "timestamp"),)
+
+    audit_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="SET NULL")
+    )
+    action: Mapped[str] = mapped_column(String(128), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    details: Mapped[dict[str, JsonValue]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )

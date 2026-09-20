@@ -4,16 +4,23 @@ from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validato
 
 from forgesoc.domain.models import (
     Alert,
+    AlertDisposition,
+    AlertStatus,
     AuthenticationOutcome,
     EventType,
     JsonValue,
     SecurityEvent,
     Severity,
+    UserRole,
 )
 from forgesoc.persistence.models import (
+    AlertNoteRecord,
+    AuditRecord,
+    CaseRecord,
     DatabaseStats,
     DetectionSummary,
     IngestionSummary,
+    UserRecord,
 )
 
 
@@ -57,6 +64,9 @@ class AlertResponse(BaseModel):
     source_ip: str | None
     related_event_ids: tuple[str, ...]
     reason: str
+    status: AlertStatus
+    assignee: str | None
+    disposition: AlertDisposition | None
 
     @classmethod
     def from_domain(cls, alert: Alert) -> "AlertResponse":
@@ -70,6 +80,9 @@ class AlertResponse(BaseModel):
             source_ip=alert.source_ip,
             related_event_ids=alert.related_event_ids,
             reason=alert.reason,
+            status=alert.status,
+            assignee=alert.assignee,
+            disposition=alert.disposition,
         )
 
 
@@ -230,3 +243,113 @@ class ErrorResponse(BaseModel):
     code: str
     message: str
     request_id: str
+
+
+class AuthStatusResponse(BaseModel):
+    initialized: bool
+
+
+class BootstrapRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9._-]+$")
+    password: str = Field(min_length=12, max_length=256)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    username: str
+    role: UserRole
+    active: bool
+    created_at: datetime
+
+    @classmethod
+    def from_record(cls, user: UserRecord) -> "UserResponse":
+        return cls.model_validate(user, from_attributes=True)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 28_800
+    user: UserResponse
+
+
+class UserCreateRequest(BootstrapRequest):
+    role: UserRole = UserRole.ANALYST
+
+
+class AlertWorkflowRequest(BaseModel):
+    status: AlertStatus
+    assignee_user_id: str | None = None
+    disposition: AlertDisposition | None = None
+
+    @field_validator("disposition")
+    @classmethod
+    def disposition_requires_closed(
+        cls, value: AlertDisposition | None
+    ) -> AlertDisposition | None:
+        return value
+
+
+class NoteCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=4_000)
+
+
+class NoteResponse(BaseModel):
+    note_id: str
+    alert_id: str
+    author: str
+    body: str
+    created_at: datetime
+
+    @classmethod
+    def from_record(cls, note: AlertNoteRecord) -> "NoteResponse":
+        return cls.model_validate(note, from_attributes=True)
+
+
+class CaseCreateRequest(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    description: str = Field(default="", max_length=4_000)
+    priority: Severity = Severity.MEDIUM
+    assignee_user_id: str | None = None
+    alert_ids: tuple[str, ...] = Field(min_length=1, max_length=100)
+
+
+class CaseUpdateRequest(BaseModel):
+    status: AlertStatus
+    assignee_user_id: str | None = None
+
+
+class CaseResponse(BaseModel):
+    case_id: str
+    title: str
+    description: str
+    status: AlertStatus
+    priority: Severity
+    assignee: str | None
+    created_by: str
+    alert_ids: tuple[str, ...]
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_record(cls, case: CaseRecord) -> "CaseResponse":
+        return cls.model_validate(case, from_attributes=True)
+
+
+class AuditResponse(BaseModel):
+    audit_id: str
+    timestamp: datetime
+    actor: str | None
+    action: str
+    entity_type: str
+    entity_id: str
+    details: dict[str, object]
+
+    @classmethod
+    def from_record(cls, audit: AuditRecord) -> "AuditResponse":
+        return cls.model_validate(audit, from_attributes=True)

@@ -10,6 +10,18 @@
 </head>
 <body>
   <div class="noise"></div>
+  <div class="auth-gate" id="auth-gate">
+    <form class="auth-card" id="auth-form">
+      <span class="brand-mark"><span></span></span>
+      <p class="eyebrow">FORGESOC ACCESS</p>
+      <h1 id="auth-title">Sign in</h1>
+      <p id="auth-copy">Authenticate to open the analyst workspace.</p>
+      <label>Username<input id="auth-username" autocomplete="username" required></label>
+      <label>Password<input id="auth-password" type="password" autocomplete="current-password" minlength="12" required></label>
+      <button class="button primary" id="auth-submit" type="submit">Sign in</button>
+      <small id="auth-hint"></small>
+    </form>
+  </div>
   <div class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#dashboard" aria-label="ForgeSOC home">
@@ -27,12 +39,20 @@
         <button class="nav-item" data-view="alerts">
           <span class="nav-icon">△</span><span>Alerts</span><b id="nav-alerts">0</b>
         </button>
+        <button class="nav-item" data-view="cases">
+          <span class="nav-icon">□</span><span>Cases</span><b id="nav-cases">0</b>
+        </button>
+        <button class="nav-item admin-only" data-view="admin">
+          <span class="nav-icon">◎</span><span>Admin</span>
+        </button>
         <button class="nav-item" data-view="workshop">
           <span class="nav-icon">◇</span><span>Workshop</span>
         </button>
       </nav>
 
       <div class="sidebar-bottom">
+        <div class="user-chip"><strong id="current-user">—</strong><small id="current-role">signed out</small></div>
+        <button class="text-button" id="logout-button">Sign out</button>
         <div class="system-state">
           <span class="pulse"></span>
           <div><strong id="system-label">Connecting</strong><small>PostgreSQL + API</small></div>
@@ -127,6 +147,7 @@
         <div class="section-intro"><div><span class="eyebrow">EXPLAINABLE DETECTIONS</span><h2>Alert investigation</h2><p>Every finding keeps the ordered evidence that produced it.</p></div><button class="button primary" id="run-detection">▶ Run detection</button></div>
         <form class="filter-bar" id="alert-filters">
           <label>Severity<select name="severity"><option value="">All severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option></select></label>
+          <label>Status<select name="status"><option value="">All states</option><option>open</option><option>investigating</option><option>closed</option></select></label>
           <label>Rule<select name="rule_id"><option value="">All rules</option></select></label>
           <label>User<input name="username" placeholder="marta.soler"></label>
           <label>Source IP<input name="source_ip" placeholder="198.51.100.73"></label>
@@ -135,6 +156,19 @@
         </form>
         <div class="alert-grid" id="alerts-grid"></div>
         <div class="pagination"><button class="button ghost" id="alerts-back">← Previous</button><span id="alerts-page">Page 1</span><button class="button ghost" id="alerts-next">Next →</button></div>
+      </section>
+
+      <section class="view" id="view-cases">
+        <div class="section-intro"><div><span class="eyebrow">ANALYST WORKFLOW</span><h2>Investigation cases</h2><p>Group related alerts, assign ownership and track resolution.</p></div><button class="button primary analyst-only" id="new-case-button">+ Create case</button></div>
+        <div class="case-grid" id="cases-grid"><div class="empty-state">No cases created</div></div>
+      </section>
+
+      <section class="view" id="view-admin">
+        <div class="section-intro"><div><span class="eyebrow">ACCESS &amp; ACCOUNTABILITY</span><h2>Administration</h2><p>Manage analysts and inspect the immutable activity trail.</p></div></div>
+        <div class="workshop-grid">
+          <article class="panel"><div class="panel-title"><div><span class="eyebrow">USERS</span><h3>Workspace members</h3></div></div><form class="inline-form" id="user-form"><input name="username" placeholder="analyst.name" required><input name="password" type="password" placeholder="12+ character password" minlength="12" required><select name="role"><option>analyst</option><option>viewer</option><option>admin</option></select><button class="button primary">Add user</button></form><div class="evidence-list" id="users-list"></div></article>
+          <article class="panel"><div class="panel-title"><div><span class="eyebrow">AUDIT LOG</span><h3>Recent actions</h3></div></div><div class="evidence-list" id="audit-list"></div></article>
+        </div>
       </section>
 
       <section class="view" id="view-workshop">
@@ -179,6 +213,18 @@
       <div class="modal-fields"><label>Seed<input id="scenario-seed" type="number" value="42"></label><label>Start time<input id="scenario-start" type="datetime-local" value="2026-09-20T10:00"></label></div>
       <div class="modal-actions"><button class="button ghost" data-close-modal>Cancel</button><button class="button primary" id="seed-button">Generate &amp; ingest</button></div>
     </section>
+  </div>
+
+  <div class="modal-backdrop" id="case-modal" aria-hidden="true">
+    <form class="modal" id="case-form" role="dialog" aria-modal="true">
+      <button class="close-button" data-close-case type="button" aria-label="Close">×</button>
+      <span class="eyebrow">NEW INVESTIGATION</span><h2>Create a case</h2><p>Start from one or more alert IDs and assign an owner.</p>
+      <label>Title<input name="title" required minlength="3" placeholder="Suspicious access investigation"></label>
+      <label>Description<input name="description" placeholder="Scope and investigation hypothesis"></label>
+      <div class="modal-fields"><label>Priority<select name="priority"><option>critical</option><option>high</option><option selected>medium</option><option>low</option></select></label><label>Assignee<select name="assignee_user_id"><option value="">Unassigned</option></select></label></div>
+      <label>Alert IDs<input name="alert_ids" required placeholder="UUID, UUID"></label>
+      <div class="modal-actions"><button class="button ghost" data-close-case type="button">Cancel</button><button class="button primary" type="submit">Create case</button></div>
+    </form>
   </div>
 
   <aside class="drawer" id="detail-drawer" aria-hidden="true"><button class="close-button" id="drawer-close" aria-label="Close">×</button><div id="drawer-content"></div></aside>

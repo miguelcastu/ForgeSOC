@@ -21,9 +21,10 @@ when an observed limitation justifies them.
 | PostgreSQL persistence and migrations | Implemented |
 | Database-backed replay and detection | Implemented |
 | Web console and versioned query API | Implemented |
+| Authentication, analyst workflow, and case management | Implemented |
 | Streaming | Planned |
 
-Current milestone: **Sprint 5 complete - analyst web console and query API**.
+Current milestone: **Sprint 6 complete - authenticated analyst workflow**.
 
 ## Implemented pipeline
 
@@ -191,10 +192,16 @@ uv run forgesoc-web
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Alternatively, build and
 run both PostgreSQL and the web application with `docker compose up --build`.
 
+On the first visit, create the initial administrator with a password of at least
+12 characters. Later users can be created from the Administration page. The
+console supports `admin`, `analyst`, and read-only `viewer` roles, alert
+assignment and resolution, investigation notes, cases, and an audit trail.
+
 The API documentation is available at
 [http://127.0.0.1:8000/api/docs](http://127.0.0.1:8000/api/docs). The server
-binds to localhost by default and does not yet implement user authentication;
-do not expose it to an untrusted network.
+binds to localhost by default. Set a strong `FORGESOC_SESSION_SECRET` before
+sharing a deployment; ForgeSOC is still an educational application and should
+not be exposed directly to the Internet.
 
 ## Repository layout
 
@@ -224,6 +231,7 @@ tests/                 Unit and end-to-end pipeline tests
 - [Sprint 3](docs/sprints/sprint-03-normalization.md)
 - [Sprint 4](docs/sprints/sprint-04-postgresql.md)
 - [Sprint 5](docs/sprints/sprint-05-web-console.md)
+- [Sprint 6](docs/sprints/sprint-06-analyst-workflow.md)
 - [Scenario catalog](docs/scenarios.md)
 - [Normalization mappings](docs/normalization.md)
 - [Persistence architecture](docs/architecture/persistence.md)

@@ -4,13 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 type JsonValue = (
-    str
-    | int
-    | float
-    | bool
-    | None
-    | list["JsonValue"]
-    | dict[str, "JsonValue"]
+    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 )
 
 CANONICAL_SCHEMA_VERSION = "1.0.0"
@@ -36,6 +30,30 @@ class Severity(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class UserRole(StrEnum):
+    ADMIN = "admin"
+    ANALYST = "analyst"
+    VIEWER = "viewer"
+
+
+class AlertStatus(StrEnum):
+    OPEN = "open"
+    INVESTIGATING = "investigating"
+    CLOSED = "closed"
+
+
+class AlertDisposition(StrEnum):
+    TRUE_POSITIVE = "true_positive"
+    FALSE_POSITIVE = "false_positive"
+    BENIGN = "benign"
+
+
+class CaseStatus(StrEnum):
+    OPEN = "open"
+    INVESTIGATING = "investigating"
+    CLOSED = "closed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,3 +84,6 @@ class Alert:
 
     related_event_ids: tuple[str, ...]
     reason: str
+    status: AlertStatus = AlertStatus.OPEN
+    assignee: str | None = None
+    disposition: AlertDisposition | None = None

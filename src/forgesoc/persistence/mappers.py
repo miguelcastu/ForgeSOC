@@ -2,6 +2,8 @@ from uuid import UUID
 
 from forgesoc.domain.models import (
     Alert,
+    AlertDisposition,
+    AlertStatus,
     AuthenticationOutcome,
     EventType,
     SecurityEvent,
@@ -60,6 +62,7 @@ def alert_to_row(alert: Alert) -> AlertRow:
 def alert_from_row(
     row: AlertRow,
     related_event_ids: tuple[str, ...],
+    assignee: str | None = None,
 ) -> Alert:
     return Alert(
         alert_id=str(row.alert_id),
@@ -71,4 +74,9 @@ def alert_from_row(
         source_ip=str(row.source_ip) if row.source_ip is not None else None,
         related_event_ids=related_event_ids,
         reason=row.reason,
+        status=AlertStatus(row.status or AlertStatus.OPEN.value),
+        assignee=assignee,
+        disposition=(
+            AlertDisposition(row.disposition) if row.disposition is not None else None
+        ),
     )

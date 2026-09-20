@@ -36,9 +36,18 @@ def api_client(api_engine: Engine) -> Iterator[TestClient]:
     )
     with api_engine.begin() as connection:
         connection.execute(
-            text("TRUNCATE alert_events, alerts, events RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE audit_log, case_alerts, cases, alert_notes, "
+                "alert_events, alerts, events, users RESTART IDENTITY CASCADE"
+            )
         )
     with TestClient(create_app(factory)) as client:
+        bootstrap = client.post(
+            "/api/v1/auth/bootstrap",
+            json={"username": "admin", "password": "correct-horse-battery"},
+        )
+        assert bootstrap.status_code == 200
+        client.headers["Authorization"] = f"Bearer {bootstrap.json()['access_token']}"
         yield client
 
 
@@ -119,9 +128,7 @@ def test_event_filters_detail_and_cursor_pagination(api_client: TestClient) -> N
     identifiers = {
         item["event_id"] for item in first_page["items"] + second_page["items"]
     }
-    detail = api_client.get(
-        f"/api/v1/events/{first_page['items'][0]['event_id']}"
-    )
+    detail = api_client.get(f"/api/v1/events/{first_page['items'][0]['event_id']}")
 
     assert first_page["next_cursor"] is not None
     assert len(identifiers) == 4
@@ -186,3 +193,87 @@ def test_missing_resources_return_consistent_404(api_client: TestClient) -> None
     assert event.status_code == 404
     assert event.json()["code"] == "http_error"
     assert alert.status_code == 404
+
+
+def test_authentication_roles_and_analyst_workflow(api_client: TestClient) -> None:
+    analyst = api_client.post(
+        "/api/v1/users",
+        json={
+            "username": "marta.analyst",
+            "password": "analyst-password-123",
+            "role": "analyst",
+        },
+    )
+    assert analyst.status_code == 200
+
+    seed_brute_force(api_client)
+    api_client.post(
+        "/api/v1/detections/run",
+        json={
+            "start": "2026-09-20T00:00:00Z",
+            "end": "2026-09-21T00:00:00Z",
+        },
+    )
+    alert_id = api_client.get("/api/v1/alerts").json()["items"][0]["alert_id"]
+    workflow = api_client.patch(
+        f"/api/v1/alerts/{alert_id}/workflow",
+        json={
+            "status": "investigating",
+            "assignee_user_id": analyst.json()["user_id"],
+        },
+    )
+    note = api_client.post(
+        f"/api/v1/alerts/{alert_id}/notes",
+        json={"body": "Validated source IP against the evidence."},
+    )
+    case = api_client.post(
+        "/api/v1/cases",
+        json={
+            "title": "Authentication attack investigation",
+            "description": "Correlate the brute-force evidence.",
+            "priority": "high",
+            "assignee_user_id": analyst.json()["user_id"],
+            "alert_ids": [alert_id],
+        },
+    )
+    audit = api_client.get("/api/v1/audit").json()
+
+    assert workflow.status_code == 200
+    assert workflow.json()["status"] == "investigating"
+    assert workflow.json()["assignee"] == "marta.analyst"
+    assert note.json()["author"] == "admin"
+    assert case.json()["alert_ids"] == [alert_id]
+    assert {item["action"] for item in audit} >= {
+        "user.created",
+        "alert.workflow_updated",
+        "alert.note_added",
+        "case.created",
+    }
+
+
+def test_viewer_cannot_mutate_security_data(api_client: TestClient) -> None:
+    api_client.post(
+        "/api/v1/users",
+        json={
+            "username": "readonly",
+            "password": "viewer-password-1234",
+            "role": "viewer",
+        },
+    )
+    login = api_client.post(
+        "/api/v1/auth/login",
+        json={"username": "readonly", "password": "viewer-password-1234"},
+    )
+    viewer_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    response = api_client.post(
+        "/api/v1/demo/seed",
+        headers=viewer_headers,
+        json={
+            "scenario": "brute-force",
+            "seed": 42,
+            "start_time": "2026-09-20T10:00:00Z",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["message"] == "insufficient permissions"

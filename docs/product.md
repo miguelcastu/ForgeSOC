@@ -73,6 +73,15 @@ introduced.
 - An embedded HTML architecture guide and five-minute workshop script.
 - A containerized API service and complete PostgreSQL API tests.
 
+## Implemented in Sprint 6
+
+- First-run administrator bootstrap and password-based login.
+- Signed, expiring sessions and admin/analyst/viewer authorization.
+- Alert status, ownership, disposition, and investigation notes.
+- Cases that group related alerts and track priority and ownership.
+- Audited workflow and user-management actions.
+- Analyst workflow, case, user, and audit views in the web console.
+
 ## Current non-goals
 
 - A complete SIEM replacement
@@ -80,7 +89,7 @@ introduced.
 - Production telemetry ingestion
 - Message broker or streaming ingestion
 - Internet-facing multi-user deployment
-- Authentication and role-based access control
+- Internet-facing identity federation, MFA, and password recovery
 - Machine-learning detection
 - Autonomous remediation
 - User interface

@@ -22,6 +22,7 @@ services:
       context: .
     environment:
       FORGESOC_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-forgesoc}:${POSTGRES_PASSWORD:-forgesoc-local-only}@postgres:5432/${POSTGRES_DB:-forgesoc_dev}
+      FORGESOC_SESSION_SECRET: ${FORGESOC_SESSION_SECRET:-forgesoc-local-development-secret-change-before-sharing}
     ports:
       - "127.0.0.1:${FORGESOC_API_PORT:-8000}:8000"
     depends_on:

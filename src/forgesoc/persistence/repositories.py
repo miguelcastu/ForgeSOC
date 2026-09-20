@@ -1,6 +1,6 @@
 from collections.abc import Iterable
-from datetime import datetime
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
@@ -8,8 +8,26 @@ from sqlalchemy.orm import Session
 
 from forgesoc.domain.models import Alert, SecurityEvent
 from forgesoc.persistence.mappers import alert_from_row, event_from_row
-from forgesoc.persistence.models import AlertPage, AlertQuery, EventPage, EventQuery
-from forgesoc.persistence.tables import AlertEventRow, AlertRow, EventRow
+from forgesoc.persistence.models import (
+    AlertNoteRecord,
+    AlertPage,
+    AlertQuery,
+    AuditRecord,
+    CaseRecord,
+    EventPage,
+    EventQuery,
+    UserRecord,
+)
+from forgesoc.persistence.tables import (
+    AlertEventRow,
+    AlertNoteRow,
+    AlertRow,
+    AuditLogRow,
+    CaseAlertRow,
+    CaseRow,
+    EventRow,
+    UserRow,
+)
 
 
 class MissingRelatedEventsError(ValueError):
@@ -74,8 +92,7 @@ class EventRepository:
             .order_by(EventRow.event_type)
         )
         return {
-            event_type: count
-            for event_type, count in self._session.execute(statement)
+            event_type: count for event_type, count in self._session.execute(statement)
         }
 
     def search(self, query: EventQuery) -> EventPage:
@@ -205,7 +222,12 @@ class AlertRepository:
             .order_by(AlertEventRow.evidence_order)
         )
         evidence = tuple(self._session.scalars(evidence_statement))
-        return alert_from_row(row, evidence)
+        assignee = None
+        if row.assignee_user_id is not None:
+            assignee = self._session.scalar(
+                select(UserRow.username).where(UserRow.user_id == row.assignee_user_id)
+            )
+        return alert_from_row(row, evidence, assignee)
 
     def count(self) -> int:
         return self._session.scalar(select(func.count()).select_from(AlertRow)) or 0
@@ -234,6 +256,8 @@ class AlertRepository:
             statement = statement.where(AlertRow.timestamp < query.end)
         if query.severity is not None:
             statement = statement.where(AlertRow.severity == query.severity)
+        if query.status is not None:
+            statement = statement.where(AlertRow.status == query.status)
         if query.rule_id is not None:
             statement = statement.where(AlertRow.rule_id == query.rule_id)
         if query.username is not None:
@@ -273,8 +297,28 @@ class AlertRepository:
             )
             for alert_id, event_id in self._session.execute(evidence_statement):
                 evidence_by_alert[alert_id].append(event_id)
+        assignee_ids = {
+            row.assignee_user_id
+            for row in page_rows
+            if row.assignee_user_id is not None
+        }
+        assignees: dict[UUID, str] = {}
+        if assignee_ids:
+            assignee_statement = select(UserRow.user_id, UserRow.username).where(
+                UserRow.user_id.in_(assignee_ids)
+            )
+            for user_id, username in self._session.execute(assignee_statement):
+                assignees[user_id] = username
         alerts = tuple(
-            alert_from_row(row, tuple(evidence_by_alert[row.alert_id]))
+            alert_from_row(
+                row,
+                tuple(evidence_by_alert[row.alert_id]),
+                (
+                    assignees.get(row.assignee_user_id)
+                    if row.assignee_user_id is not None
+                    else None
+                ),
+            )
             for row in page_rows
         )
         return AlertPage(items=alerts, has_more=len(rows) > query.limit)
@@ -290,3 +334,223 @@ class AlertRepository:
             .order_by(AlertEventRow.evidence_order)
         )
         return tuple(event_from_row(row) for row in self._session.scalars(statement))
+
+    def update_workflow(
+        self,
+        alert_id: str,
+        *,
+        status: str,
+        assignee_user_id: UUID | None,
+        disposition: str | None,
+    ) -> bool:
+        row = self._session.get(AlertRow, UUID(alert_id))
+        if row is None:
+            return False
+        row.status = status
+        row.assignee_user_id = assignee_user_id
+        row.disposition = disposition
+        row.updated_at = datetime.now(UTC)
+        return True
+
+
+class UserRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def count(self) -> int:
+        return self._session.scalar(select(func.count()).select_from(UserRow)) or 0
+
+    def create(self, username: str, password_hash: str, role: str) -> UserRecord:
+        row = UserRow(
+            user_id=uuid4(),
+            username=username,
+            password_hash=password_hash,
+            role=role,
+            active=True,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return self._record(row)
+
+    def by_username(self, username: str) -> UserRow | None:
+        return self._session.scalar(
+            select(UserRow).where(func.lower(UserRow.username) == username.lower())
+        )
+
+    def get(self, user_id: str) -> UserRow | None:
+        return self._session.get(UserRow, UUID(user_id))
+
+    def list(self) -> tuple[UserRecord, ...]:
+        rows = self._session.scalars(select(UserRow).order_by(UserRow.username))
+        return tuple(self._record(row) for row in rows)
+
+    @staticmethod
+    def _record(row: UserRow) -> UserRecord:
+        return UserRecord(
+            user_id=str(row.user_id),
+            username=row.username,
+            role=row.role,
+            active=row.active,
+            created_at=row.created_at,
+        )
+
+
+class WorkflowRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add_note(self, alert_id: str, author_id: str, body: str) -> AlertNoteRecord:
+        row = AlertNoteRow(
+            note_id=uuid4(),
+            alert_id=UUID(alert_id),
+            author_user_id=UUID(author_id),
+            body=body,
+        )
+        self._session.add(row)
+        self._session.flush()
+        author = self._session.get(UserRow, row.author_user_id)
+        assert author is not None
+        return AlertNoteRecord(
+            note_id=str(row.note_id),
+            alert_id=alert_id,
+            author=author.username,
+            body=row.body,
+            created_at=row.created_at,
+        )
+
+    def notes(self, alert_id: str) -> tuple[AlertNoteRecord, ...]:
+        statement = (
+            select(AlertNoteRow, UserRow.username)
+            .join(UserRow, UserRow.user_id == AlertNoteRow.author_user_id)
+            .where(AlertNoteRow.alert_id == UUID(alert_id))
+            .order_by(AlertNoteRow.created_at)
+        )
+        return tuple(
+            AlertNoteRecord(
+                note_id=str(row.note_id),
+                alert_id=str(row.alert_id),
+                author=username,
+                body=row.body,
+                created_at=row.created_at,
+            )
+            for row, username in self._session.execute(statement)
+        )
+
+    def create_case(
+        self,
+        *,
+        title: str,
+        description: str,
+        priority: str,
+        assignee_user_id: UUID | None,
+        created_by_user_id: UUID,
+        alert_ids: tuple[str, ...],
+    ) -> CaseRecord:
+        row = CaseRow(
+            case_id=uuid4(),
+            title=title,
+            description=description,
+            status="open",
+            priority=priority,
+            assignee_user_id=assignee_user_id,
+            created_by_user_id=created_by_user_id,
+        )
+        self._session.add(row)
+        self._session.flush()
+        for alert_id in alert_ids:
+            self._session.add(
+                CaseAlertRow(case_id=row.case_id, alert_id=UUID(alert_id))
+            )
+        self._session.flush()
+        return self._case_record(row, alert_ids)
+
+    def list_cases(self) -> tuple[CaseRecord, ...]:
+        rows = self._session.scalars(
+            select(CaseRow).order_by(CaseRow.updated_at.desc())
+        )
+        return tuple(self._case_record(row) for row in rows)
+
+    def update_case(
+        self, case_id: str, *, status: str, assignee_user_id: UUID | None
+    ) -> CaseRecord | None:
+        row = self._session.get(CaseRow, UUID(case_id))
+        if row is None:
+            return None
+        row.status = status
+        row.assignee_user_id = assignee_user_id
+        row.updated_at = datetime.now(UTC)
+        self._session.flush()
+        return self._case_record(row)
+
+    def audit(
+        self,
+        *,
+        actor_user_id: str | None,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        self._session.add(
+            AuditLogRow(
+                audit_id=uuid4(),
+                actor_user_id=UUID(actor_user_id) if actor_user_id else None,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                details=details or {},
+            )
+        )
+
+    def audit_log(self, limit: int = 100) -> tuple[AuditRecord, ...]:
+        statement = (
+            select(AuditLogRow, UserRow.username)
+            .outerjoin(UserRow, UserRow.user_id == AuditLogRow.actor_user_id)
+            .order_by(AuditLogRow.timestamp.desc())
+            .limit(limit)
+        )
+        return tuple(
+            AuditRecord(
+                audit_id=str(row.audit_id),
+                timestamp=row.timestamp,
+                actor=username,
+                action=row.action,
+                entity_type=row.entity_type,
+                entity_id=row.entity_id,
+                details=dict(row.details),
+            )
+            for row, username in self._session.execute(statement)
+        )
+
+    def _case_record(
+        self, row: CaseRow, known_alert_ids: tuple[str, ...] | None = None
+    ) -> CaseRecord:
+        alert_ids = known_alert_ids or tuple(
+            str(value)
+            for value in self._session.scalars(
+                select(CaseAlertRow.alert_id).where(CaseAlertRow.case_id == row.case_id)
+            )
+        )
+        assignee = (
+            self._session.scalar(
+                select(UserRow.username).where(UserRow.user_id == row.assignee_user_id)
+            )
+            if row.assignee_user_id is not None
+            else None
+        )
+        creator = self._session.scalar(
+            select(UserRow.username).where(UserRow.user_id == row.created_by_user_id)
+        )
+        assert creator is not None
+        return CaseRecord(
+            case_id=str(row.case_id),
+            title=row.title,
+            description=row.description,
+            status=row.status,
+            priority=row.priority,
+            assignee=assignee,
+            created_by=creator,
+            alert_ids=alert_ids,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )

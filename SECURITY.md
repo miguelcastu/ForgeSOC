@@ -24,8 +24,10 @@ database volumes: even a development dump may contain telemetry or credentials.
 The Compose defaults are local development credentials and must not be reused
 in any shared or production environment.
 
-The Sprint 5 API has no authentication or authorization. Its direct launcher
-binds to `127.0.0.1` deliberately. Do not expose port 8000 to an untrusted
-network, and do not deploy the Compose configuration as a public service.
-Imported JSONL is limited and validated, but only synthetic telemetry belongs
-in this educational environment.
+The API uses PBKDF2 password hashing, signed eight-hour bearer sessions, and
+role-based authorization. Set a unique, high-entropy `FORGESOC_SESSION_SECRET`;
+changing it invalidates all existing sessions. The direct launcher and Compose
+still bind to `127.0.0.1`. TLS termination, rate limiting, password recovery,
+MFA, centralized identity, and production secret management are outside the
+current educational scope, so do not expose the service directly to the
+Internet. Imported telemetry must remain synthetic.

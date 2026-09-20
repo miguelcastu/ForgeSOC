@@ -49,6 +49,7 @@ class AlertQuery:
     start: datetime | None = None
     end: datetime | None = None
     severity: str | None = None
+    status: str | None = None
     rule_id: str | None = None
     username: str | None = None
     source_ip: str | None = None
@@ -67,3 +68,46 @@ class EventPage:
 class AlertPage:
     items: tuple[Alert, ...]
     has_more: bool
+
+
+@dataclass(frozen=True, slots=True)
+class UserRecord:
+    user_id: str
+    username: str
+    role: str
+    active: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AlertNoteRecord:
+    note_id: str
+    alert_id: str
+    author: str
+    body: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CaseRecord:
+    case_id: str
+    title: str
+    description: str
+    status: str
+    priority: str
+    assignee: str | None
+    created_by: str
+    alert_ids: tuple[str, ...]
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AuditRecord:
+    audit_id: str
+    timestamp: datetime
+    actor: str | None
+    action: str
+    entity_type: str
+    entity_id: str
+    details: Mapping[str, object]

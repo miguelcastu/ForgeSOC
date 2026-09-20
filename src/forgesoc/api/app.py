@@ -26,6 +26,13 @@ from forgesoc.api.pagination import (
 from forgesoc.api.schemas import (
     AlertPageResponse,
     AlertResponse,
+    AlertWorkflowRequest,
+    AuditResponse,
+    AuthStatusResponse,
+    BootstrapRequest,
+    CaseCreateRequest,
+    CaseResponse,
+    CaseUpdateRequest,
     DemoSeedRequest,
     DetectionRequest,
     DetectionResponse,
@@ -34,11 +41,25 @@ from forgesoc.api.schemas import (
     EventPageResponse,
     EventResponse,
     IngestionResponse,
+    LoginRequest,
     NormalizationIngestionResponse,
+    NoteCreateRequest,
+    NoteResponse,
     RawImportRequest,
     RejectionResponse,
     ScenarioResponse,
     StatsResponse,
+    TokenResponse,
+    UserCreateRequest,
+    UserResponse,
+)
+from forgesoc.api.security import (
+    InvalidTokenError,
+    UserIdentity,
+    create_token,
+    decode_token,
+    hash_password,
+    verify_password,
 )
 from forgesoc.detection.brute_force import BruteForceDetector
 from forgesoc.ingestion.raw_jsonl import RawRecord
@@ -51,7 +72,12 @@ from forgesoc.persistence.database import (
     create_session_factory,
 )
 from forgesoc.persistence.models import AlertQuery, EventQuery
-from forgesoc.persistence.repositories import AlertRepository, EventRepository
+from forgesoc.persistence.repositories import (
+    AlertRepository,
+    EventRepository,
+    UserRepository,
+    WorkflowRepository,
+)
 from forgesoc.persistence.services import (
     DatabaseDetectionService,
     DatabaseStatsService,
@@ -69,6 +95,36 @@ def _session_factory(request: Request) -> SessionFactory:
 
 def _request_id(request: Request) -> str:
     return cast(str, getattr(request.state, "request_id", "unknown"))
+
+
+def _identity(request: Request) -> UserIdentity:
+    identity = getattr(request.state, "identity", None)
+    if not isinstance(identity, UserIdentity):
+        raise HTTPException(status_code=401, detail="authentication required")
+    return identity
+
+
+def _require_roles(request: Request, *roles: str) -> UserIdentity:
+    identity = _identity(request)
+    if identity.role not in roles:
+        raise HTTPException(status_code=403, detail="insufficient permissions")
+    return identity
+
+
+def _optional_user_id(
+    session_factory: SessionFactory, user_id: str | None
+) -> UUID | None:
+    if user_id is None:
+        return None
+    try:
+        identifier = UUID(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid user ID") from exc
+    with session_factory() as session:
+        user = UserRepository(session).get(user_id)
+        if user is None or not user.active:
+            raise HTTPException(status_code=400, detail="assignee not found")
+    return identifier
 
 
 def _error(request: Request, status_code: int, code: str, message: str) -> JSONResponse:
@@ -142,6 +198,46 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         )
         return response
 
+    @app.middleware("http")
+    async def authenticate_api(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        public_paths = {
+            "/api/v1/auth/status",
+            "/api/v1/auth/bootstrap",
+            "/api/v1/auth/login",
+        }
+        if (
+            request.url.path.startswith("/api/v1/")
+            and request.url.path not in public_paths
+        ):
+            if not hasattr(request.state, "request_id"):
+                request.state.request_id = str(uuid4())
+            authorization = request.headers.get("Authorization", "")
+            if not authorization.startswith("Bearer "):
+                response = _error(
+                    request, 401, "authentication_required", "authentication required"
+                )
+                response.headers["X-Request-ID"] = _request_id(request)
+                return response
+            try:
+                token_identity = decode_token(authorization.removeprefix("Bearer "))
+                with _session_factory(request)() as session:
+                    user = UserRepository(session).get(token_identity.user_id)
+                    if user is None or not user.active:
+                        raise InvalidTokenError("inactive or unknown user")
+                    request.state.identity = UserIdentity(
+                        user_id=str(user.user_id),
+                        username=user.username,
+                        role=user.role,
+                    )
+            except (InvalidTokenError, ValueError):
+                response = _error(request, 401, "invalid_session", "invalid session")
+                response.headers["X-Request-ID"] = _request_id(request)
+                return response
+        return await call_next(request)
+
     @app.exception_handler(RequestValidationError)
     async def validation_error(
         request: Request,
@@ -177,6 +273,98 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         with _session_factory(request)() as session:
             session.execute(text("SELECT 1"))
         return {"status": "ready", "database": "connected"}
+
+    @app.get(
+        "/api/v1/auth/status",
+        response_model=AuthStatusResponse,
+        tags=["authentication"],
+    )
+    def auth_status(request: Request) -> AuthStatusResponse:
+        with _session_factory(request)() as session:
+            initialized = UserRepository(session).count() > 0
+        return AuthStatusResponse(initialized=initialized)
+
+    @app.post(
+        "/api/v1/auth/bootstrap",
+        response_model=TokenResponse,
+        tags=["authentication"],
+    )
+    def bootstrap(payload: BootstrapRequest, request: Request) -> TokenResponse:
+        with _session_factory(request).begin() as session:
+            users = UserRepository(session)
+            if users.count() > 0:
+                raise HTTPException(
+                    status_code=409, detail="ForgeSOC is already initialized"
+                )
+            user = users.create(
+                payload.username, hash_password(payload.password), "admin"
+            )
+            identity = UserIdentity(user.user_id, user.username, user.role)
+            WorkflowRepository(session).audit(
+                actor_user_id=user.user_id,
+                action="system.bootstrap",
+                entity_type="user",
+                entity_id=user.user_id,
+            )
+        return TokenResponse(
+            access_token=create_token(identity), user=UserResponse.from_record(user)
+        )
+
+    @app.post(
+        "/api/v1/auth/login",
+        response_model=TokenResponse,
+        tags=["authentication"],
+    )
+    def login(payload: LoginRequest, request: Request) -> TokenResponse:
+        with _session_factory(request)() as session:
+            row = UserRepository(session).by_username(payload.username)
+            if (
+                row is None
+                or not row.active
+                or not verify_password(payload.password, row.password_hash)
+            ):
+                raise HTTPException(status_code=401, detail="invalid credentials")
+            user = UserRepository._record(row)
+        identity = UserIdentity(user.user_id, user.username, user.role)
+        return TokenResponse(
+            access_token=create_token(identity), user=UserResponse.from_record(user)
+        )
+
+    @app.get("/api/v1/auth/me", response_model=UserResponse, tags=["authentication"])
+    def me(request: Request) -> UserResponse:
+        identity = _identity(request)
+        with _session_factory(request)() as session:
+            row = UserRepository(session).get(identity.user_id)
+            assert row is not None
+            return UserResponse.from_record(UserRepository._record(row))
+
+    @app.get("/api/v1/users", response_model=list[UserResponse], tags=["users"])
+    def users(request: Request) -> list[UserResponse]:
+        _identity(request)
+        with _session_factory(request)() as session:
+            return [
+                UserResponse.from_record(user)
+                for user in UserRepository(session).list()
+            ]
+
+    @app.post("/api/v1/users", response_model=UserResponse, tags=["users"])
+    def create_user(payload: UserCreateRequest, request: Request) -> UserResponse:
+        actor = _require_roles(request, "admin")
+        with _session_factory(request).begin() as session:
+            users = UserRepository(session)
+            if users.by_username(payload.username) is not None:
+                raise HTTPException(status_code=409, detail="username already exists")
+            user = users.create(
+                payload.username, hash_password(payload.password), payload.role.value
+            )
+            WorkflowRepository(session).audit(
+                actor_user_id=actor.user_id,
+                action="user.created",
+                entity_type="user",
+                entity_id=user.user_id,
+                details={"role": payload.role.value},
+            )
+        return UserResponse.from_record(user)
 
     @app.get("/api/v1/stats", response_model=StatsResponse, tags=["overview"])
     def stats(request: Request) -> StatsResponse:
@@ -247,6 +435,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         payload: EventImportRequest,
         request: Request,
     ) -> IngestionResponse:
+        _require_roles(request, "admin", "analyst")
         summary = EventIngestionService(_session_factory(request)).ingest(
             event.to_domain() for event in payload.events
         )
@@ -261,6 +450,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         payload: RawImportRequest,
         request: Request,
     ) -> NormalizationIngestionResponse:
+        _require_roles(request, "admin", "analyst")
         records = [
             RawRecord(
                 input_path=Path("<web-import>"),
@@ -269,9 +459,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
             )
             for index, record in enumerate(payload.records, start=1)
         ]
-        results = list(
-            build_engine().normalize(records, continue_on_error=True)
-        )
+        results = list(build_engine().normalize(records, continue_on_error=True))
         successes = [
             result for result in results if isinstance(result, NormalizationSuccess)
         ]
@@ -309,6 +497,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         start: datetime | None = None,
         end: datetime | None = None,
         severity: str | None = None,
+        status: str | None = None,
         rule_id: str | None = None,
         username: str | None = None,
         source_ip: str | None = None,
@@ -327,6 +516,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
             start=start,
             end=end,
             severity=severity,
+            status=status,
             rule_id=rule_id,
             username=username,
             source_ip=source_ip,
@@ -369,6 +559,177 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="alert not found")
         return [EventResponse.from_domain(event) for event in evidence]
 
+    @app.patch(
+        "/api/v1/alerts/{alert_id}/workflow",
+        response_model=AlertResponse,
+        tags=["workflow"],
+    )
+    def update_alert_workflow(
+        alert_id: UUID,
+        payload: AlertWorkflowRequest,
+        request: Request,
+    ) -> AlertResponse:
+        actor = _require_roles(request, "admin", "analyst")
+        if payload.status.value != "closed" and payload.disposition is not None:
+            raise HTTPException(
+                status_code=400, detail="disposition is only valid for closed alerts"
+            )
+        assignee_id = _optional_user_id(
+            _session_factory(request), payload.assignee_user_id
+        )
+        with _session_factory(request).begin() as session:
+            alerts_repository = AlertRepository(session)
+            updated = alerts_repository.update_workflow(
+                str(alert_id),
+                status=payload.status.value,
+                assignee_user_id=assignee_id,
+                disposition=(
+                    payload.disposition.value if payload.disposition else None
+                ),
+            )
+            if not updated:
+                raise HTTPException(status_code=404, detail="alert not found")
+            WorkflowRepository(session).audit(
+                actor_user_id=actor.user_id,
+                action="alert.workflow_updated",
+                entity_type="alert",
+                entity_id=str(alert_id),
+                details={
+                    "status": payload.status.value,
+                    "assignee_user_id": payload.assignee_user_id,
+                    "disposition": (
+                        payload.disposition.value if payload.disposition else None
+                    ),
+                },
+            )
+            session.flush()
+            alert = alerts_repository.get(str(alert_id))
+            assert alert is not None
+        return AlertResponse.from_domain(alert)
+
+    @app.get(
+        "/api/v1/alerts/{alert_id}/notes",
+        response_model=list[NoteResponse],
+        tags=["workflow"],
+    )
+    def alert_notes(alert_id: UUID, request: Request) -> list[NoteResponse]:
+        with _session_factory(request)() as session:
+            if AlertRepository(session).get(str(alert_id)) is None:
+                raise HTTPException(status_code=404, detail="alert not found")
+            return [
+                NoteResponse.from_record(note)
+                for note in WorkflowRepository(session).notes(str(alert_id))
+            ]
+
+    @app.post(
+        "/api/v1/alerts/{alert_id}/notes",
+        response_model=NoteResponse,
+        tags=["workflow"],
+    )
+    def add_alert_note(
+        alert_id: UUID, payload: NoteCreateRequest, request: Request
+    ) -> NoteResponse:
+        actor = _require_roles(request, "admin", "analyst")
+        with _session_factory(request).begin() as session:
+            if AlertRepository(session).get(str(alert_id)) is None:
+                raise HTTPException(status_code=404, detail="alert not found")
+            workflow = WorkflowRepository(session)
+            note = workflow.add_note(str(alert_id), actor.user_id, payload.body)
+            workflow.audit(
+                actor_user_id=actor.user_id,
+                action="alert.note_added",
+                entity_type="alert",
+                entity_id=str(alert_id),
+            )
+        return NoteResponse.from_record(note)
+
+    @app.get("/api/v1/cases", response_model=list[CaseResponse], tags=["workflow"])
+    def cases(request: Request) -> list[CaseResponse]:
+        with _session_factory(request)() as session:
+            return [
+                CaseResponse.from_record(case)
+                for case in WorkflowRepository(session).list_cases()
+            ]
+
+    @app.post("/api/v1/cases", response_model=CaseResponse, tags=["workflow"])
+    def create_case(payload: CaseCreateRequest, request: Request) -> CaseResponse:
+        actor = _require_roles(request, "admin", "analyst")
+        assignee_id = _optional_user_id(
+            _session_factory(request), payload.assignee_user_id
+        )
+        with _session_factory(request).begin() as session:
+            alerts_repository = AlertRepository(session)
+            missing = [
+                alert_id
+                for alert_id in payload.alert_ids
+                if alerts_repository.get(alert_id) is None
+            ]
+            if missing:
+                raise HTTPException(
+                    status_code=400, detail="case contains unknown alerts"
+                )
+            workflow = WorkflowRepository(session)
+            case = workflow.create_case(
+                title=payload.title,
+                description=payload.description,
+                priority=payload.priority.value,
+                assignee_user_id=assignee_id,
+                created_by_user_id=UUID(actor.user_id),
+                alert_ids=payload.alert_ids,
+            )
+            workflow.audit(
+                actor_user_id=actor.user_id,
+                action="case.created",
+                entity_type="case",
+                entity_id=case.case_id,
+                details={"alert_count": len(payload.alert_ids)},
+            )
+        return CaseResponse.from_record(case)
+
+    @app.patch(
+        "/api/v1/cases/{case_id}",
+        response_model=CaseResponse,
+        tags=["workflow"],
+    )
+    def update_case(
+        case_id: UUID, payload: CaseUpdateRequest, request: Request
+    ) -> CaseResponse:
+        actor = _require_roles(request, "admin", "analyst")
+        assignee_id = _optional_user_id(
+            _session_factory(request), payload.assignee_user_id
+        )
+        with _session_factory(request).begin() as session:
+            workflow = WorkflowRepository(session)
+            case = workflow.update_case(
+                str(case_id), status=payload.status.value, assignee_user_id=assignee_id
+            )
+            if case is None:
+                raise HTTPException(status_code=404, detail="case not found")
+            workflow.audit(
+                actor_user_id=actor.user_id,
+                action="case.updated",
+                entity_type="case",
+                entity_id=str(case_id),
+                details={"status": payload.status.value},
+            )
+        return CaseResponse.from_record(case)
+
+    @app.get(
+        "/api/v1/audit",
+        response_model=list[AuditResponse],
+        tags=["workflow"],
+    )
+    def audit_log(
+        request: Request,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[AuditResponse]:
+        _require_roles(request, "admin")
+        with _session_factory(request)() as session:
+            return [
+                AuditResponse.from_record(item)
+                for item in WorkflowRepository(session).audit_log(limit)
+            ]
+
     @app.get(
         "/api/v1/scenarios",
         response_model=list[ScenarioResponse],
@@ -386,6 +747,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         tags=["operations"],
     )
     def seed_demo(payload: DemoSeedRequest, request: Request) -> IngestionResponse:
+        _require_roles(request, "admin", "analyst")
         try:
             scenario = get_scenario(payload.scenario)
         except ValueError as exc:
@@ -409,6 +771,7 @@ def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
         payload: DetectionRequest,
         request: Request,
     ) -> DetectionResponse:
+        _require_roles(request, "admin", "analyst")
         try:
             summary = DatabaseDetectionService(
                 _session_factory(request),

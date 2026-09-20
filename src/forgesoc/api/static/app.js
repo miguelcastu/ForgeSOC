@@ -1,4 +1,7 @@
 const state = {
+  token: window.localStorage.getItem("forgesoc_token"),
+  user: null,
+  users: [],
   stats: null,
   scenarios: [],
   eventCursors: [null],
@@ -17,11 +20,18 @@ const esc = (value) => String(value ?? "—").replace(/[&<>'"]/g, (char) => ({
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
+      ...(options.headers || {}),
+    },
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`);
+  if (!response.ok) {
+    if (response.status === 401 && !path.includes("/auth/")) showAuth();
+    throw new Error(payload.message || `Request failed (${response.status})`);
+  }
   return payload;
 }
 
@@ -52,12 +62,56 @@ function queryString(values) {
 function switchView(name) {
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === `view-${name}`));
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
-  const titles = { dashboard: "Security overview", events: "Event explorer", alerts: "Alert investigation", workshop: "Architecture & workshop" };
+  const titles = { dashboard: "Security overview", events: "Event explorer", alerts: "Alert investigation", cases: "Investigation cases", admin: "Administration", workshop: "Architecture & workshop" };
   $("#page-title").textContent = titles[name];
   window.location.hash = name;
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (name === "events") loadEvents(true);
   if (name === "alerts") loadAlerts(true);
+  if (name === "cases") loadCases();
+  if (name === "admin") loadAdmin();
+}
+
+function showAuth(initialized = true) {
+  $("#auth-gate").classList.add("open");
+  $("#auth-title").textContent = initialized ? "Sign in" : "Create the first administrator";
+  $("#auth-copy").textContent = initialized ? "Authenticate to open the analyst workspace." : "Initialize this local ForgeSOC deployment.";
+  $("#auth-submit").textContent = initialized ? "Sign in" : "Initialize ForgeSOC";
+  $("#auth-form").dataset.mode = initialized ? "login" : "bootstrap";
+  $("#auth-password").autocomplete = initialized ? "current-password" : "new-password";
+}
+
+async function authenticate(event) {
+  event.preventDefault();
+  const button = $("#auth-submit");
+  button.disabled = true;
+  try {
+    const mode = $("#auth-form").dataset.mode || "login";
+    const result = await api(`/api/v1/auth/${mode}`, {
+      method: "POST",
+      body: JSON.stringify({ username: $("#auth-username").value, password: $("#auth-password").value }),
+    });
+    state.token = result.access_token;
+    state.user = result.user;
+    window.localStorage.setItem("forgesoc_token", state.token);
+    $("#auth-gate").classList.remove("open");
+    applyIdentity();
+    await startWorkspace();
+  } catch (error) { $("#auth-hint").textContent = error.message; }
+  finally { button.disabled = false; }
+}
+
+function applyIdentity() {
+  $("#current-user").textContent = state.user?.username || "—";
+  $("#current-role").textContent = state.user?.role || "signed out";
+  $$(".admin-only").forEach((item) => item.hidden = state.user?.role !== "admin");
+  $$(".analyst-only").forEach((item) => item.hidden = state.user?.role === "viewer");
+}
+
+function logout() {
+  state.token = null; state.user = null;
+  window.localStorage.removeItem("forgesoc_token");
+  showAuth(true);
 }
 
 async function checkHealth() {
@@ -188,7 +242,7 @@ async function loadAlerts(reset = false) {
 function renderAlerts(items) {
   const root = $("#alerts-grid");
   if (!items.length) { root.innerHTML = '<div class="empty-state">No alerts match these filters</div>'; return; }
-  root.innerHTML = items.map((alert) => `<article class="alert-card" data-alert-id="${esc(alert.alert_id)}"><div class="alert-top"><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span><time class="subline">${formatDate(alert.timestamp)}</time></div><h3>${esc(alert.title)}</h3><p>${esc(alert.reason)}</p><div class="alert-meta"><span>${esc(alert.rule_id)}</span><span>${alert.related_event_ids.length} evidence events</span><span>Investigate →</span></div></article>`).join("");
+  root.innerHTML = items.map((alert) => `<article class="alert-card" data-alert-id="${esc(alert.alert_id)}"><div class="alert-top"><span><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span> <span class="badge ${esc(alert.status)}">${esc(alert.status)}</span></span><time class="subline">${formatDate(alert.timestamp)}</time></div><h3>${esc(alert.title)}</h3><p>${esc(alert.reason)}</p><div class="alert-meta"><span>${esc(alert.rule_id)}</span><span>${esc(alert.assignee || "unassigned")}</span><span>Investigate →</span></div></article>`).join("");
   $$('[data-alert-id]', root).forEach((item) => item.addEventListener("click", () => openAlert(item.dataset.alertId)));
 }
 
@@ -209,9 +263,14 @@ async function openEvent(id) {
 async function openAlert(id) {
   openDrawer('<div class="empty-state">Loading investigation…</div>');
   try {
-    const [alert, evidence] = await Promise.all([api(`/api/v1/alerts/${id}`), api(`/api/v1/alerts/${id}/events`)]);
-    openDrawer(`<span class="eyebrow">ALERT INVESTIGATION</span><h2 class="detail-title">${esc(alert.title)}</h2><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span><p class="detail-reason">${esc(alert.reason)}</p><div class="detail-grid"><div><small>Rule</small><b>${esc(alert.rule_id)}</b></div><div><small>Detected</small><b>${formatDate(alert.timestamp)}</b></div><div><small>Username</small><b>${esc(alert.username)}</b></div><div><small>Source IP</small><b>${esc(alert.source_ip)}</b></div><div><small>Alert ID</small><b>${esc(alert.alert_id)}</b></div><div><small>Evidence</small><b>${evidence.length} events</b></div></div><span class="eyebrow">ORDERED EVIDENCE</span><div class="evidence-list">${evidence.map((event, index) => `<div class="evidence-item" data-evidence-id="${esc(event.event_id)}"><b>${String(index + 1).padStart(2, "0")} · ${esc(event.event_type)} · ${esc(event.username)}</b><span>${formatDate(event.timestamp)} · ${esc(event.source_ip)} · ${esc(event.event_id)}</span></div>`).join("")}</div>`);
+    const [alert, evidence, notes] = await Promise.all([api(`/api/v1/alerts/${id}`), api(`/api/v1/alerts/${id}/events`), api(`/api/v1/alerts/${id}/notes`)]);
+    const userOptions = state.users.map((user) => `<option value="${esc(user.user_id)}" ${user.username === alert.assignee ? "selected" : ""}>${esc(user.username)}</option>`).join("");
+    const workflow = state.user?.role === "viewer" ? "" : `<form class="workflow-form" id="alert-workflow"><label>Status<select name="status"><option ${alert.status === "open" ? "selected" : ""}>open</option><option ${alert.status === "investigating" ? "selected" : ""}>investigating</option><option ${alert.status === "closed" ? "selected" : ""}>closed</option></select></label><label>Assignee<select name="assignee_user_id"><option value="">Unassigned</option>${userOptions}</select></label><label>Disposition<select name="disposition"><option value="">None</option><option ${alert.disposition === "true_positive" ? "selected" : ""}>true_positive</option><option ${alert.disposition === "false_positive" ? "selected" : ""}>false_positive</option><option ${alert.disposition === "benign" ? "selected" : ""}>benign</option></select></label><button class="button primary">Save workflow</button></form>`;
+    const noteForm = state.user?.role === "viewer" ? "" : `<form class="inline-form note-form" id="alert-note"><input name="body" required placeholder="Add investigation note"><button class="button ghost">Add note</button></form>`;
+    openDrawer(`<span class="eyebrow">ALERT INVESTIGATION</span><h2 class="detail-title">${esc(alert.title)}</h2><span class="badge ${esc(alert.severity)}">${esc(alert.severity)}</span> <span class="badge ${esc(alert.status)}">${esc(alert.status)}</span><p class="detail-reason">${esc(alert.reason)}</p><div class="detail-grid"><div><small>Rule</small><b>${esc(alert.rule_id)}</b></div><div><small>Detected</small><b>${formatDate(alert.timestamp)}</b></div><div><small>Username</small><b>${esc(alert.username)}</b></div><div><small>Source IP</small><b>${esc(alert.source_ip)}</b></div><div><small>Owner</small><b>${esc(alert.assignee)}</b></div><div><small>Disposition</small><b>${esc(alert.disposition)}</b></div></div>${workflow}<span class="eyebrow">INVESTIGATION NOTES</span>${noteForm}<div class="evidence-list">${notes.map((note) => `<div class="evidence-item"><b>${esc(note.author)} · ${formatDate(note.created_at)}</b><span>${esc(note.body)}</span></div>`).join("") || '<div class="empty-state">No notes yet</div>'}</div><span class="eyebrow">ORDERED EVIDENCE</span><div class="evidence-list">${evidence.map((event, index) => `<div class="evidence-item" data-evidence-id="${esc(event.event_id)}"><b>${String(index + 1).padStart(2, "0")} · ${esc(event.event_type)} · ${esc(event.username)}</b><span>${formatDate(event.timestamp)} · ${esc(event.source_ip)} · ${esc(event.event_id)}</span></div>`).join("")}</div>`);
     $$('[data-evidence-id]', $("#drawer-content")).forEach((item) => item.addEventListener("click", () => openEvent(item.dataset.evidenceId)));
+    $("#alert-workflow")?.addEventListener("submit", async (event) => { event.preventDefault(); const values = formValues(event.target); values.disposition ||= null; values.assignee_user_id ||= null; try { await api(`/api/v1/alerts/${id}/workflow`, { method: "PATCH", body: JSON.stringify(values) }); toast("Alert workflow updated"); await openAlert(id); loadAlerts(true); } catch (error) { toast(error.message, "error"); } });
+    $("#alert-note")?.addEventListener("submit", async (event) => { event.preventDefault(); try { await api(`/api/v1/alerts/${id}/notes`, { method: "POST", body: JSON.stringify(formValues(event.target)) }); toast("Investigation note added"); await openAlert(id); } catch (error) { toast(error.message, "error"); } });
   } catch (error) { openDrawer(`<div class="empty-state">${esc(error.message)}</div>`); }
 }
 
@@ -278,9 +337,59 @@ async function importJsonl(file) {
   finally { $("#jsonl-input").value = ""; }
 }
 
+async function loadUsers() {
+  state.users = await api("/api/v1/users");
+  const options = state.users.filter((user) => user.active).map((user) => `<option value="${esc(user.user_id)}">${esc(user.username)} · ${esc(user.role)}</option>`).join("");
+  $('#case-form select[name="assignee_user_id"]').innerHTML = `<option value="">Unassigned</option>${options}`;
+}
+
+async function loadCases() {
+  try {
+    const cases = await api("/api/v1/cases");
+    $("#nav-cases").textContent = cases.length;
+    $("#cases-grid").innerHTML = cases.map((item) => `<article class="alert-card"><div class="alert-top"><span><span class="badge ${esc(item.priority)}">${esc(item.priority)}</span> <span class="badge ${esc(item.status)}">${esc(item.status)}</span></span><time class="subline">${formatDate(item.updated_at)}</time></div><h3>${esc(item.title)}</h3><p>${esc(item.description || "No description")}</p><div class="alert-meta"><span>${esc(item.assignee || "unassigned")}</span><span>${item.alert_ids.length} alerts</span><span>${esc(item.case_id)}</span></div></article>`).join("") || '<div class="empty-state">No cases created</div>';
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function createCase(event) {
+  event.preventDefault();
+  const values = formValues(event.target);
+  values.alert_ids = values.alert_ids.split(",").map((value) => value.trim()).filter(Boolean);
+  values.assignee_user_id ||= null;
+  try {
+    await api("/api/v1/cases", { method: "POST", body: JSON.stringify(values) });
+    toast("Investigation case created"); caseModal(false); event.target.reset(); await loadCases();
+  } catch (error) { toast(error.message, "error"); }
+}
+
+function caseModal(open) {
+  $("#case-modal").classList.toggle("open", open);
+  $("#case-modal").setAttribute("aria-hidden", String(!open));
+}
+
+async function loadAdmin() {
+  if (state.user?.role !== "admin") return;
+  try {
+    const [users, audit] = await Promise.all([api("/api/v1/users"), api("/api/v1/audit?limit=50")]);
+    state.users = users;
+    $("#users-list").innerHTML = users.map((user) => `<div class="evidence-item"><b>${esc(user.username)}</b><span>${esc(user.role)} · ${user.active ? "active" : "disabled"}</span></div>`).join("");
+    $("#audit-list").innerHTML = audit.map((item) => `<div class="evidence-item"><b>${esc(item.action)} · ${esc(item.actor || "system")}</b><span>${formatDate(item.timestamp)} · ${esc(item.entity_type)} · ${esc(item.entity_id)}</span></div>`).join("") || '<div class="empty-state">No activity recorded</div>';
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function createUser(event) {
+  event.preventDefault();
+  try {
+    await api("/api/v1/users", { method: "POST", body: JSON.stringify(formValues(event.target)) });
+    toast("User created"); event.target.reset(); await Promise.all([loadUsers(), loadAdmin()]);
+  } catch (error) { toast(error.message, "error"); }
+}
+
 async function refreshAll() { await Promise.all([checkHealth(), loadDashboard()]); }
 
 function bindEvents() {
+  $("#auth-form").addEventListener("submit", authenticate);
+  $("#logout-button").addEventListener("click", logout);
   $$(".nav-item").forEach((item) => item.addEventListener("click", () => switchView(item.dataset.view)));
   $$('[data-view-target]').forEach((item) => item.addEventListener("click", () => switchView(item.dataset.viewTarget)));
   $$('[data-open-demo]').forEach((item) => item.addEventListener("click", () => modal(true)));
@@ -300,14 +409,30 @@ function bindEvents() {
   $("#events-back").addEventListener("click", () => { if (!state.eventPage) return; state.eventCursors.pop(); state.eventPage -= 1; loadEvents(); });
   $("#alerts-next").addEventListener("click", () => { if (!state.alertNext) return; state.alertCursors.push(state.alertNext); state.alertPage += 1; loadAlerts(); });
   $("#alerts-back").addEventListener("click", () => { if (!state.alertPage) return; state.alertCursors.pop(); state.alertPage -= 1; loadAlerts(); });
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") { modal(false); $("#detail-drawer").classList.remove("open"); } });
+  $("#new-case-button").addEventListener("click", () => caseModal(true));
+  $$('[data-close-case]').forEach((item) => item.addEventListener("click", () => caseModal(false)));
+  $("#case-form").addEventListener("submit", createCase);
+  $("#user-form").addEventListener("submit", createUser);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") { modal(false); caseModal(false); $("#detail-drawer").classList.remove("open"); } });
+}
+
+async function startWorkspace() {
+  await loadUsers();
+  const initial = window.location.hash.slice(1);
+  if (["dashboard", "events", "alerts", "cases", "admin", "workshop"].includes(initial)) switchView(initial);
+  await Promise.all([refreshAll(), loadScenarios()]);
 }
 
 async function init() {
   bindEvents();
-  const initial = window.location.hash.slice(1);
-  if (["dashboard", "events", "alerts", "workshop"].includes(initial)) switchView(initial);
-  await Promise.all([refreshAll(), loadScenarios()]);
+  const status = await api("/api/v1/auth/status");
+  if (!status.initialized) { showAuth(false); return; }
+  if (!state.token) { showAuth(true); return; }
+  try {
+    state.user = await api("/api/v1/auth/me");
+    applyIdentity();
+    await startWorkspace();
+  } catch { logout(); }
 }
 
 init();
