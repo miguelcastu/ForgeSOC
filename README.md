@@ -264,6 +264,11 @@ main <- pull request <- feature/socplat-XXX-short-description
 Use small Conventional Commits such as `feat:`, `fix:`, `test:`, `docs:`, and
 `chore:`. Pull requests should pass Ruff and pytest before merging.
 
+## Complete architecture
+
+<img width="10266" height="1563" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/8890ee72-7078-4307-a2e3-dd3d2278ccc9" />
+
+
 ## Security
 
 Never commit real telemetry, credentials, tokens, API keys, or personal data.
