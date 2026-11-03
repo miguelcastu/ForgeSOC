@@ -101,7 +101,6 @@ introduced.
 - Internet-facing identity federation, MFA, and password recovery
 - Machine-learning detection
 - Autonomous remediation
-- User interface
 
 ## Engineering principles
 
