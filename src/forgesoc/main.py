@@ -17,6 +17,13 @@ def run(
     input_path: Path,
     output_path: Path,
 ) -> int:
+    if input_path.resolve() == output_path.resolve() or (
+        input_path.exists()
+        and output_path.exists()
+        and input_path.samefile(output_path)
+    ):
+        raise ValueError("Input and output must be different files")
+
     events = read_events(
         input_path
     )
