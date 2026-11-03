@@ -1,4 +1,16 @@
-# Sprint 1 architecture
+# Architecture overview
+
+ForgeSOC is a synchronous Python application with two execution routes: a
+file-to-file detection CLI, and durable event replay through PostgreSQL with a
+FastAPI analyst console. The same detector registry serves both. See the
+[reviewer guide](../reviewer-guide.md) for the current system and
+[persistence](persistence.md) / [web API](web-api.md) for their boundaries.
+
+The sections below retain the incremental design history. Sprint 1 constraints
+describe the original slice; canonical events now include process, privilege,
+service, file, network and DNS events as well as authentication.
+
+## Original file pipeline
 
 ## Data flow
 
@@ -77,7 +89,7 @@ consume that registry so execution and documentation cannot drift silently.
 ## Intentional limitations
 
 - Events are assumed to arrive in timestamp order.
-- Only the current canonical authentication schema is accepted.
+- Source records must be normalized to the canonical schema before file detection.
 - Detection state exists only in process memory.
 - Output replaces the target file on every execution.
 - Processing is synchronous and single-process.

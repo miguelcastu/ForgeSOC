@@ -1,14 +1,17 @@
-# ForgeSOC
+# ForgeSOC — An Experimental Detection & Response Platform
 
-ForgeSOC is an educational Open Detection & Response Platform built
-incrementally to explore detection engineering, security software engineering,
-and SOC platform engineering through working code.
+Security findings are useful only when the path from source telemetry to alert
+evidence is understandable and repeatable. ForgeSOC explores that path through
+working software: Windows/Linux normalization, stateful rules, PostgreSQL
+persistence, and a FastAPI console for investigation and case management.
 
-The project deliberately starts as a small synchronous Python application.
-Infrastructure such as databases, APIs, and message brokers will only be added
-when an observed limitation justifies them.
-<img width="1886" height="837" alt="image" src="https://github.com/user-attachments/assets/4d1260a7-b2dc-4523-8185-decef10ae19d" />
+**Python 3.12 · FastAPI · PostgreSQL · SQLAlchemy / Alembic · deterministic tests.**
+This is an educational single-process platform, with explicit contracts rather
+than a claim to replace a production SIEM.
 
+[Quick start](#quick-start) · [Reviewer guide](docs/reviewer-guide.md)
+· [Architecture](docs/architecture/overview.md) · [Testing](docs/development/testing.md)
+· [Security](SECURITY.md)
 
 ## Project status
 
@@ -31,26 +34,19 @@ Current milestone: **Sprint 7 complete - threat-informed detection coverage**.
 
 ## Implemented pipeline
 
-```text
-security_events.jsonl
-        |
-        v
-  JSONL ingestion
-        |
-        v
-  SecurityEvent
-        |
-        v
- DetectionEngine
-        |
-        v
-BruteForceDetector
-        |
-        v
-      Alert
-        |
-        v
-   alerts.jsonl
+```mermaid
+flowchart LR
+  RAW[Windows and Linux JSONL] --> ADAPTER[Source adapters and validation]
+  ADAPTER --> EVENT[Canonical events]
+  EVENT --> FILE[Canonical JSONL]
+  FILE --> ENGINE[Stateful detection engine]
+  ENGINE --> JSON[Alert JSONL]
+  EVENT --> DB[PostgreSQL events]
+  DB --> REPLAY[Ordered time-range replay]
+  REPLAY --> ENGINE
+  ENGINE --> ALERT[Persisted alerts and event evidence]
+  ALERT --> API[FastAPI and analyst console]
+  API --> CASE[Assignment, notes and cases]
 ```
 
 The initial rule is `AUTH-BRUTEFORCE-001`:
@@ -81,7 +77,7 @@ The project does not depend on a globally installed Python environment.
 From PowerShell in the repository root:
 
 ```powershell
-uv sync
+uv sync --locked
 uv run ruff check .
 uv run pytest -v
 uv run forgesoc data/security_events.jsonl data/alerts.jsonl
@@ -185,6 +181,11 @@ keeps canonical events, alerts, and the ordered event evidence for each alert.
 
 ## Launch the web console
 
+![Author-provided historical ForgeSOC console screenshot](https://github.com/user-attachments/assets/4d1260a7-b2dc-4523-8185-decef10ae19d)
+
+This is the existing author-provided application image; this refresh does not
+claim a new local console capture.
+
 The web console replaces the normal demonstration workflow previously spread
 across several CLI commands. It provides dashboards, event search, alert
 investigation, ordered evidence, canonical or raw Windows/Linux JSONL import,
@@ -266,7 +267,7 @@ Use small Conventional Commits such as `feat:`, `fix:`, `test:`, `docs:`, and
 
 ## Complete architecture
 
-<img width="10266" height="1563" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/8890ee72-7078-4307-a2e3-dd3d2278ccc9" />
+<img width="10266" height="1563" alt="Detailed ForgeSOC component architecture" src="https://github.com/user-attachments/assets/8890ee72-7078-4307-a2e3-dd3d2278ccc9" />
 
 
 ## Security
