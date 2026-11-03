@@ -17,6 +17,11 @@ uv run forgesoc data/security_events.jsonl data/alerts.jsonl
   benign activity, and completeness of the MITRE metadata catalog.
 - `tests/test_pipeline.py` exercises ingestion, detection, and output together
   using the committed synthetic dataset and a temporary output file.
+- `tests/test_output_safety.py` checks that interrupted or malformed input does
+  not destroy previous output, that partial reports are never published, and
+  that input/output aliases are rejected. Successful writes replace the output
+  atomically using a sibling temporary file. This is not a power-loss durability
+  guarantee; destination symlinks are replaced rather than followed.
 - `tests/test_simulation.py` verifies deterministic generation, event contracts,
   scenario meaning, overwrite protection, JSONL round trips, and current
   detection results.
