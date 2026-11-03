@@ -181,6 +181,11 @@ keeps canonical events, alerts, and the ordered event evidence for each alert.
 
 ## Launch the web console
 
+![Author-provided historical ForgeSOC console screenshot](https://github.com/user-attachments/assets/4d1260a7-b2dc-4523-8185-decef10ae19d)
+
+This is the existing author-provided application image; this refresh does not
+claim a new local console capture.
+
 The web console replaces the normal demonstration workflow previously spread
 across several CLI commands. It provides dashboards, event search, alert
 investigation, ordered evidence, canonical or raw Windows/Linux JSONL import,
